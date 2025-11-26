@@ -1,0 +1,16 @@
+model:
+  checkpoint_path: '/blue/hennig/sam.dong/disordered_gnn/checkpoints/'
+  batch_size: 4
+  num_epochs: 500
+  criterion: 'bce'
+  optimizer: 'adam'
+  lr: 0.000006
+  test_val_split: 0.9
+  n_hid: 32
+  gnn:
+    n_layers: 1
+    dropout: 0.3
+    n_resid_layers: 2
+    n_mlp_layers: 2
+  classifier:
+    hidden_dim: 32
