@@ -1,3 +1,6 @@
+import torch
+import torch.nn as nn
+
 def mlp(in_dim, out_dim, hidden_dim=None, num_layers=2, activation=nn.ReLU):
     """
     Args:
