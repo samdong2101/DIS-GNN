@@ -14,9 +14,10 @@ import torch
 from pymatgen.core import Lattice, Structure, Molecule, Element
 from pymatgen.io.vasp.outputs import Poscar
 from pymatgen.transformations.standard_transformations import RotationTransformation
+import pickle
 
 with open('/blue/hennig/sam.dong/mp_api/mp_api_09_25_2025.pkl', 'rb') as f:
-    structures = pickle.load(f) 
+    structures = pickle.load(f)
 
 structures_20_ind = [i for i,structure in enumerate(structures) if len(structure['structure']['sites']) <= 12 and structure['energy_above_hull'] is not None and
     structure['energy_above_hull'] <= 0.1]
@@ -26,7 +27,7 @@ structures_20 = [Structure.from_dict(structures[i]['structure']) for i in struct
 
 class GraphFeaturizer:
     def __init__(self,structures, properties, cutoff, property_name = 'band_gap'):
-        self.structures = structures 
+        self.structures = structures
         self.cutoff = cutoff
         self.properties = properties
         self.property_name = property_name
@@ -37,7 +38,7 @@ class GraphFeaturizer:
         bonded = np.where(distance_mat<=cutoff)
         same_atoms = np.where(distance_mat==0)
         init_adjacency[bonded[0],bonded[1]] = 1
-        init_adjacency[same_atoms[0],same_atoms[1]] = 0 
+        init_adjacency[same_atoms[0],same_atoms[1]] = 0
         row, col = np.where(init_adjacency == 1)
         edge_index = torch.tensor([row,col])
         edge_type = torch.ones_like(edge_index[0])
@@ -96,10 +97,10 @@ class GraphFeaturizer:
             'lanthanides': ['La', 'Ce', 'Pr', 'Nd', 'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm', 'Yb', 'Lu'],
             'actinides': ['Ac', 'Th', 'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm', 'Bk', 'Cf', 'Es', 'Fm', 'Md', 'No', 'Lr']
         }
-    
+
         elems = [Element.from_Z(i) for i in structure.atomic_numbers]
         node_features = []
-    
+
         for e in elems:
             # Original 8 features
             features = torch.tensor([
@@ -116,32 +117,32 @@ class GraphFeaturizer:
                     else 0
                 ),
             ], dtype=torch.float)
-    
+
             # Create a flat vector of length 126
             embedded = torch.zeros(126, dtype=torch.float)
             # Insert the feature vector starting at atomic number index (subtract 1 for 0-indexing)
             start_idx = e.number - 1
             embedded[start_idx:start_idx + 8] = features
             node_features.append(embedded)
-    
+
         node_features = torch.stack(node_features, dim=0)  # shape: (num_atoms, 126)
-    
+
         node_types = [
             next((k for k, v in groups.items() if e.symbol in v), None)
             for e in elems
         ]
-    
+
         return node_features, node_types
     def create_edge_features(self,structure,adjacency_matrix):
         bond_distances = []
         edge_features = []
-        count = 0 
+        count = 0
         t = 0
         start_time = time.time()
         def gaussian_expansion(dist, num_bins, width):
             centers = np.linspace(0, self.cutoff, num_bins)
             return np.exp(-((dist - centers)**2) / (width**2))
-        bonded_atoms = np.where(adjacency_matrix == 1) 
+        bonded_atoms = np.where(adjacency_matrix == 1)
         element_i = [structure.species[bonded_atoms[0][count_i]] for count_i in range(len(bonded_atoms[0]))]
         element_j = [structure.species[bonded_atoms[1][count_j]] for count_j in range(len(bonded_atoms[1]))]
         atomic_radii_i = [
@@ -164,7 +165,7 @@ class GraphFeaturizer:
         elapsed_time = end_time - start_time
         return edge_features
 
-    
+
     def featurize(self):
         df = []
         for i, structure in enumerate(self.structures):
@@ -186,6 +187,3 @@ class GraphFeaturizer:
             })
         df = pd.DataFrame(df)
         return df
-
-
-  
