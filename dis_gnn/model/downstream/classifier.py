@@ -1,3 +1,6 @@
+import torch
+import torch.nn as nn
+
 class Classifier(nn.Module):
     def __init__(self, input_dim, hidden_dim=32):
         """
@@ -29,7 +32,7 @@ class Classifier(nn.Module):
         x = self.fc_hidden4(x)
         x = self.relu(x)
         x = self.fc2(x)
-        x = self.sigmoid(x)  
+        x = self.sigmoid(x)
         return x
 
     def __repr__(self):
