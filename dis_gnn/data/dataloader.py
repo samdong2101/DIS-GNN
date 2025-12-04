@@ -41,13 +41,15 @@ class DataLoader:
     node_features = [i for i in df['node_feature']]
     edge_indices = [i for i in df['edge_index']]
     band_gaps = [i for i in df['band_gap']]
-    edge_features = [i[0] for i in df['edge_feature']]
+    edge_features = [i for i in df['edge_feature']]
     labels = [0 if bg == 0 else 1 for bg in band_gaps]
     structures = [i for i in df['structure']]
+    cells = [torch.tensor(i.lattice.matrix).flatten() for i in structures]
+    coords = [torch.tensor(i.frac_coords) for i in structures]
     frac = sum(labels)/len(labels)
     baseline = calculate_bce_baseline(frac)
     print('BASELINE BCE LOSS:',baseline)
-    return node_features,edge_indices, band_gaps, edge_features, labels, structures
+    return node_features,edge_indices, band_gaps, edge_features, labels, structures, cells, coords
 
 
   def batch_node_features(self, feature_list, batch_size):
@@ -70,6 +72,40 @@ class DataLoader:
               batched_group_sizes.append(batched_group_size)
       return batched_node_features, batched_group_sizes
 
+  def batch_cells(self, feature_list, batch_size):
+      num_batches = int(np.round(len(feature_list)/batch_size)) - 1
+      batched_cells = []
+      batch_index = 0
+      for batch in range(num_batches):
+          try:
+              batched_cell = torch.cat(feature_list[batch_index:batch_index + batch_size])
+              batched_cells.append(torch.tensor(batched_cell))
+              batch_index = batch_index + batch_size
+          except:
+              batched_cell = torch.cat(feature_list[batch_index:])
+              batched_cells.append(torch.tensor(batched_cell))
+      return batched_cells
+
+
+  def batch_coordinates(self, coordinate_list, batch_size):
+    num_batches = int(np.round(len(coordinate_list) / batch_size)) - 1
+    batched_coords = []
+    batch_index = 0
+
+    for batch in range(num_batches):
+        try:
+            batched_coord = torch.cat(coordinate_list[batch_index:batch_index + batch_size])
+            batched_coords.append(torch.tensor(batched_coord))
+            batch_index += batch_size
+        except:
+            batched_coord = torch.cat(coordinate_list[batch_index:])
+            batched_coords.append(torch.tensor(batched_coord))
+
+    return batched_coords
+
+
+
+
   def batch_edge_features(self, feature_list, batch_size):
       num_batches = int(np.round(len(feature_list)/batch_size)) - 1 
       batched_edge_features = []
@@ -77,13 +113,15 @@ class DataLoader:
       for batch in range(num_batches):
           try:
               batched_edge_feature = feature_list[batch_index:batch_index + batch_size]
-              batched_edge_feature = [item for sublist in batched_edge_feature for item in sublist]
-              batched_edge_features.append(batched_edge_feature)
+              batched_edge_feature = np.concatenate(feature_list[batch_index:batch_index + batch_size])
+              #batched_edge_feature = [item for sublist in batched_edge_feature for item in sublist]
+              batched_edge_features.append(torch.tensor(batched_edge_feature))
               batch_index = batch_index + batch_size
           except:
               batched_edge_feature = feature_list[batch_index:]
-              batched_edge_feature = [item for sublist in batched_edge_feature for item in sublist]
-              batched_edge_features.append(batched_edge_feature)
+              batched_edge_feature = np.concatenate(feature_list[batch_index:])
+              #batched_edge_feature = [item for sublist in batched_edge_feature for item in sublist]
+              batched_edge_features.append(torch.tensor(batched_edge_feature))
       return batched_edge_features
 
   def batch_edge_indices(self, feature_list, batch_size, node_features):
@@ -139,15 +177,18 @@ class DataLoader:
           batched_target_values.append(repeated_tensor)
       return batched_target_values
   
-  def batch_data(self, batch_size, node_features, edge_indices, edge_features, labels):
+  def batch_data(self, batch_size, node_features, edge_indices, edge_features, labels, cells, coords):
     batched_node_features, batched_group_sizes = self.batch_node_features(node_features, self.batch_size)
     batched_edge_indices = self.batch_edge_indices(edge_indices, self.batch_size, node_features)
     batched_edge_features = self.batch_edge_features(edge_features, self.batch_size)
     batched_node_indices = self.batch_node_indices(node_features, self.batch_size)
     batched_labels = self.batch_labels(labels, self.batch_size)
-    return batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes
+    batched_cells = self.batch_cells(cells, self.batch_size)
+    batched_coords = self.batch_coordinates(coords, self.batch_size)
+
+    return batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords
 
   def get_data(self):
-    node_features, edge_indices, band_gaps, edge_features, labels, structures = self.load_data(self.df)
-    batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes = self.batch_data(self.batch_size, node_features, edge_indices, edge_features, labels)
-    return batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes
+    node_features, edge_indices, band_gaps, edge_features, labels, structures, cells, coords = self.load_data(self.df)
+    batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords = self.batch_data(self.batch_size, node_features, edge_indices, edge_features, labels, cells, coords)
+    return batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords
