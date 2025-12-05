@@ -1,2 +1,2 @@
 
-<img width="2500" height="1327" alt="DIS-GNN-WORKFLOW" src="https://github.com/user-attachments/assets/91df3213-0567-49d8-940a-88308ef38517" />
+<img width="2475" height="1568" alt="DIS-GNN-WORKFLOW" src="https://github.com/user-attachments/assets/e810993a-938c-4f50-bc0c-b5d878faae98" />
