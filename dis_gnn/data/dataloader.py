@@ -33,24 +33,29 @@ def calculate_bce_baseline(proportion_positive: float) -> float:
 
 
 class DataLoader:
-  def __init__(self, df, batch_size = 32):
+  def __init__(self, df, batch_size = 32, graphtype = 'crystal'):
     self.df = df
     self.batch_size = batch_size
-    
+    self.graphtype = graphtype    
   def load_data(self, df):
-    node_features = [i for i in df['node_feature']]
-    edge_indices = [i for i in df['edge_index']]
-    band_gaps = [i for i in df['band_gap']]
-    edge_features = [i for i in df['edge_feature']]
-    labels = [0 if bg == 0 else 1 for bg in band_gaps]
-    structures = [i for i in df['structure']]
-    cells = [torch.tensor(i.lattice.matrix).flatten() for i in structures]
-    coords = [torch.tensor(i.frac_coords) for i in structures]
-    frac = sum(labels)/len(labels)
-    baseline = calculate_bce_baseline(frac)
-    print('BASELINE BCE LOSS:',baseline)
-    return node_features,edge_indices, band_gaps, edge_features, labels, structures, cells, coords
-
+    if self.graphtype == 'crystal':
+        node_features = [i for i in df['node_feature']]
+        edge_indices = [i for i in df['edge_index']]
+        band_gaps = [i for i in df['band_gap']]
+        edge_features = [i for i in df['edge_feature']]
+        labels = [0 if bg == 0 else 1 for bg in band_gaps]
+        structures = [i for i in df['structure']]
+        cells = [torch.tensor(i.lattice.matrix).flatten() for i in structures]
+        coords = [torch.tensor(i.frac_coords) for i in structures]
+        frac = sum(labels)/len(labels)
+        baseline = calculate_bce_baseline(frac)
+        print('BASELINE BCE LOSS:',baseline)
+        return node_features,edge_indices, band_gaps, edge_features, labels, structures, cells, coords
+    else:
+        node_features = [i for i in df['line_node_feature']]
+        edge_indices = [i for i in df['line_edge_index']]
+        edge_features = [i for i in df['line_edge_feature']]
+        return node_features, edge_indices, edge_features
 
   def batch_node_features(self, feature_list, batch_size):
       num_batches = int(np.round(len(feature_list)/batch_size)) - 1
@@ -177,18 +182,27 @@ class DataLoader:
           batched_target_values.append(repeated_tensor)
       return batched_target_values
   
-  def batch_data(self, batch_size, node_features, edge_indices, edge_features, labels, cells, coords):
-    batched_node_features, batched_group_sizes = self.batch_node_features(node_features, self.batch_size)
-    batched_edge_indices = self.batch_edge_indices(edge_indices, self.batch_size, node_features)
-    batched_edge_features = self.batch_edge_features(edge_features, self.batch_size)
-    batched_node_indices = self.batch_node_indices(node_features, self.batch_size)
-    batched_labels = self.batch_labels(labels, self.batch_size)
-    batched_cells = self.batch_cells(cells, self.batch_size)
-    batched_coords = self.batch_coordinates(coords, self.batch_size)
-
-    return batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords
-
+  def batch_data(self, batch_size, node_features, edge_indices, edge_features, labels=None, cells=None, coords=None):
+        if self.graphtype == 'crystal':
+            batched_node_features, batched_group_sizes = self.batch_node_features(node_features, self.batch_size)
+            batched_edge_indices = self.batch_edge_indices(edge_indices, self.batch_size, node_features)
+            batched_edge_features = self.batch_edge_features(edge_features, self.batch_size)
+            batched_node_indices = self.batch_node_indices(node_features, self.batch_size)
+            batched_labels = self.batch_labels(labels, self.batch_size)
+            batched_cells = self.batch_cells(cells, self.batch_size)
+            batched_coords = self.batch_coordinates(coords, self.batch_size)
+            return batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords
+        else:
+            batched_node_features, batched_group_sizes = self.batch_node_features(node_features, self.batch_size)
+            batched_edge_indices = self.batch_edge_indices(edge_indices, self.batch_size, node_features)
+            batched_edge_features = self.batch_edge_features(edge_features, self.batch_size)
+            return batched_node_features, batched_edge_indices, batched_edge_features
   def get_data(self):
-    node_features, edge_indices, band_gaps, edge_features, labels, structures, cells, coords = self.load_data(self.df)
-    batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords = self.batch_data(self.batch_size, node_features, edge_indices, edge_features, labels, cells, coords)
-    return batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords
+    if self.graphtype == 'crystal':
+        node_features, edge_indices, band_gaps, edge_features, labels, structures, cells, coords = self.load_data(self.df)
+        batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords = self.batch_data(self.batch_size, node_features, edge_indices, edge_features, labels, cells, coords)
+        return batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords
+    else:
+        node_features, edge_indices, edge_features = self.load_data(self.df)
+        batched_node_features, batched_edge_indices, batched_edge_features = self.batch_data(self.batch_size, node_features, edge_indices, edge_features)
+        return batched_node_features, batched_edge_indices, batched_edge_features 
