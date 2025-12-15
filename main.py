@@ -2,6 +2,7 @@ import yaml
 from dis_gnn.model.gnn import GNN 
 from dis_gnn.model.downstream.classifier import Classifier 
 from dis_gnn.data.featurization import GraphFeaturizer
+from dis_gnn.data.line_graph_featurizer import LineGraphFeaturizer
 from dis_gnn.data.dataloader import DataLoader
 import torch
 import torch.nn as nn
@@ -23,23 +24,30 @@ from dis_gnn.utils.logger import logger
 from datetime import datetime
 
 
-def load_data(structures_path = None, df_path = None, batch_size = 32, property_name = 'band_gap', composition = None, cutoff = 4.0, save_path = './dis_gnn/data/data'):
+def load_data(structures_path = None, df_path = None, ldf_path = None, batch_size = 32, property_name = 'band_gap', composition = None, num_atoms = 20, cutoff = 4.0, df_save_path = None, ldf_save_path = None):   
     if df_path is None:
         with open(structures_path,'rb') as f:
             structures = pickle.load(f)
-        gf = GraphFeaturizer(structures, cutoff, property_name, composition = composition, save_path = save_path)
+        gf = GraphFeaturizer(structures, cutoff, property_name, composition = composition, num_atoms = num_atoms, save_path = df_save_path)
         df = gf.featurize()
+        lgf = LineGraphFeaturizer(df, save_path=line_df_save_path)
+        ldf = lgf.featurize() 
         dl = DataLoader(df, batch_size = batch_size)
-        batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes = dl.get_data()
-            
+        ldl = DataLoader(ldf, batch_size = batch_size)
+        batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords = dl.get_data()
+        batched_line_node_features, batched_line_edge_indices, batched_line_edge_features = ldl.get_data() 
     else:
         with open(df_path, 'rb') as f:
             df = pickle.load(f)
+        with open(ldf_path, 'rb') as f:
+            ldf = pickle.load(f) 
         dl = DataLoader(df, batch_size = batch_size)
-        batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes = dl.get_data()
-    
-    return batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes
-            
+        ldl = DataLoader(ldf, batch_size = batch_size)
+        batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords = dl.get_data()
+        batched_line_node_features, batched_line_edge_indices, batched_line_edge_features = ldl.get_data()
+        #print('batched_coords:', batched_coords)
+        #print('batched_coords shape:', [i.shape for i in batched_coords])
+    return batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords, batched_line_node_features, batched_line_edge_indices, batched_line_edge_features
 
 
 def train(cfg_path):
@@ -65,11 +73,16 @@ def train(cfg_path):
     clf_hidden_dim = clf_cfg["hidden_dim"]
     dm_cfg = cfg["data_module"]
     df_path = dm_cfg["df_path"]
+    ldf_path = dm_cfg["ldf_path"]
     structures_path = dm_cfg["structures_path"]
     composition = dm_cfg["composition"]
-    data = load_data(df_path = df_path, structures_path = structures_path, batch_size = batch_size, 
-        composition = composition, property_name = dm_cfg['property_name'], save_path = dm_cfg["save_path"], cutoff = dm_cfg["cutoff"])
-    batched_node_features, batched_edge_indices, batched_edge_features, batched_target_values, batched_node_indices, batched_group_sizes = data[0], data[1], data[2], data[3], data[4], data[5]
+    num_atoms = dm_cfg["num_atoms"]
+
+    data = load_data(df_path = df_path, ldf_path = ldf_path, structures_path = structures_path, batch_size = batch_size, 
+        composition = composition, num_atoms = num_atoms,  property_name = dm_cfg['property_name'], 
+        df_save_path = dm_cfg["df_save_path"], ldf_save_path = dm_cfg["ldf_save_path"], cutoff = dm_cfg["cutoff"])
+    
+    batched_node_features, batched_edge_indices, batched_edge_features, batched_target_values, batched_node_indices, batched_group_sizes, batched_cells, batched_coords, batched_line_node_features, batched_line_edge_indices, batched_line_edge_features = data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8], data[9], data[10]    
     in_dim = batched_node_features[0].shape[1]
     num = int(num*len(batched_node_features))
     num_val = len(batched_node_features) - num
@@ -105,14 +118,16 @@ def train(cfg_path):
             optimizer.zero_grad(set_to_none=True)
             
                   # --- Move only current batch to GPU ---
-            flattened_node_features, flattened_edge_indices, flattened_edge_features = batched_node_features[i].to(device), batched_edge_indices[i].to(device), torch.tensor(batched_edge_features[i], dtype=torch.float32, device=device)
-            y_labels = batched_target_values[i].to(dtype=torch.float32, device=device).reshape(batch_size, 1)
-                  
+            flattened_node_features, flattened_edge_indices, flattened_edge_features = batched_node_features[i].to(device), batched_edge_indices[i].to(device), batched_edge_features[i].to(device=device,dtype=torch.float32) #torch.tensor(batched_edge_features[i], dtype=torch.float32, device=device)
+            flattened_line_node_features, flattened_line_edge_indices, flattened_line_edge_features = batched_line_node_features[i].to(device), batched_line_edge_indices[i].to(device), batched_line_edge_features[i].to(device=device,dtype=torch.float32)
+            cells, coords = batched_cells[i].to(dtype=torch.float32, device = device), batched_coords[i].to(dtype=torch.float32, device=device)
+            y_labels = batched_target_values[i].to(dtype=torch.float32, device=device).reshape(batch_size, 1)      
             #state = torch.repeat_interleave(batched_target_values[i], batched_group_sizes[i]).to(dtype=torch.float32, device = device) #batched_target_values[i].to(dtype=torch.float32, device=device)
             #print(state.shape)
             group_sizes = batched_group_sizes[i].to(device = device)
             state = batched_target_values[i].to(dtype=torch.float32, device=device)
-            output = gnn(flattened_node_features, flattened_edge_indices, flattened_edge_features, state, group_sizes)
+            state = torch.zeros_like(state).to(dtype = torch.float32, device=device)
+            output = gnn(flattened_node_features, flattened_edge_indices, flattened_edge_features, state, group_sizes, cells, coords)
             pooled_output = gnn.pool(output, batched_node_indices[i])
             pred = classifier(pooled_output)
             loss = criterion(pred, y_labels)
@@ -148,11 +163,16 @@ def train(cfg_path):
         with torch.no_grad():
             for i in range(num_val):
                 flattened_node_features_val, flattened_edge_indices_val, flattened_edge_features_val = batched_node_features[num + i].to(device), batched_edge_indices[num + i].to(device), torch.tensor(batched_edge_features[num + i], dtype=torch.float32, device=device)
+                
                 y_labels_val = batched_target_values[num + i].to(dtype=torch.float32, device=device).reshape(batch_size, 1)
                         #state_val = torch.repeat_interleave(batched_target_values[num + i], batched_group_sizes[num + i]).to(dtype=torch.float32, device = device)
                 state_val = batched_target_values[num+i].to(dtype=torch.float32, device=device)
+
+                cells_val, coords_val = batched_cells[num+i].to(dtype=torch.float32, device=device), batched_coords[num+i].to(dtype=torch.float32, device=device)
+
                 group_sizes_val = batched_group_sizes[num + i].to(device = device)
-                output_val = gnn(flattened_node_features_val, flattened_edge_indices_val, flattened_edge_features_val, state_val, group_sizes_val)
+                output_val = gnn(flattened_node_features_val, flattened_edge_indices_val, flattened_edge_features_val, state_val, group_sizes_val, cells_val, coords_val)
+                
                 output_val = gnn.pool(output_val, batched_node_indices[num + i])
                 pred_val = classifier(output_val)
                 loss_val = criterion(pred_val, y_labels_val)
