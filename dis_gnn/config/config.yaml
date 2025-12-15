@@ -1,19 +1,22 @@
 data_module:
-  df_path: null #'/blue/hennig/sam.dong/DIS_GNN/dis_gnn/data/data/df_transition_metal_oxide.pkl'
-  composition: null #["O","Sc","Ti","V","Cr","Mn","Fe","Co","Ni","Cu","Zn","Y","Zr","Nb","Mo","Tc","Ru","Rh","Pd","Ag","Cd","Hf","Ta","W","Re","Os","Ir","Pt","Au","Hg","Rf","Db","Sg","Bh","Hs","Mt","Ds","Rg","Cn"]  
+  df_path: '/blue/hennig/sam.dong/dis_gnn_github/DIS-GNN/dis_gnn/data/data/df_all_elems_angular_basis_12_atoms_4_cutoff_symmetries.pkl'  
+  ldf_path: '/blue/hennig/sam.dong/dis_gnn_github/DIS-GNN/dis_gnn/data/data/line_graph_df.pkl' 
+  composition: null
   structures_path: '/blue/hennig/sam.dong/mp_api/mp_api_09_25_2025.pkl'
   cutoff: 4.0
+  num_atoms: 12
   property_name: 'band_gap'
-  save_path: '/blue/hennig/sam.dong/DIS_GNN/dis_gnn/data/data/df_transition_metal_oxide.pkl'
+  df_save_path: '/blue/hennig/sam.dong/dis_gnn_github/DIS-GNN/dis_gnn/data/data/df_1hc_all_elems_angular_basis_12_atoms_4_cutoff_symmetries.pkl'
+  ldf_save_path: '/blue/hennig/sam.dong/dis_gnn_github/DIS-GNN/dis_gnn/data/data/ldf.pkl'
 model:
   checkpoint_path: '/blue/hennig/sam.dong/disordered_gnn/checkpoints/'
-  batch_size: 4
-  num_epochs: 750
+  batch_size: 1
+  num_epochs: 1500
   criterion: 'bce'
   optimizer: 'adam'
-  lr: 0.0000025
+  lr: 0.00000005
   test_val_split: 0.9
-  n_hid: 32
+  n_hid: 64
   gnn:
     n_layers: 3
     dropout: 0.5
