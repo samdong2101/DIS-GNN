@@ -6,73 +6,88 @@ from .layers import GatedMLP
 from .conv import GeneralConv
 
 class GNN(nn.Module):
-    def __init__(self, in_dim, n_hid, n_layers, batch_size, dropout = 0.2, ff_hidden = 32, n_resid_layers = 1, n_mlp_layers = 1):
+    def __init__(self, in_dim, line_in_dim, n_hid, n_layers, batch_size, dropout = 0.2, ff_hidden = 32, n_resid_layers = 1, n_mlp_layers = 1):
         super(GNN, self).__init__()
         self.gcs = nn.ModuleList()
+        self.line_gcs = nn.ModuleList()
+        self.final_gcs = nn.ModuleList()
         self.in_dim    = in_dim
+        self.line_in_dim = line_in_dim
         self.n_hid     = n_hid
         self.node_ff  = nn.ModuleList()
         self.edge_ff = nn.ModuleList()
         self.drop      = nn.Dropout(dropout)
-        self.Print = False
         
         self.node_linear = nn.Linear(in_dim,n_hid)
+        self.line_node_linear = nn.Linear(line_in_dim,n_hid)
         self.edge_linear = nn.Linear(80, n_hid)
+        self.line_edge_linear = nn.Linear(40, n_hid)
         self.state_linear = nn.Linear(batch_size, batch_size)
         self.cell_linear = nn.Linear(batch_size*9, batch_size)
         self.coord_linear = nn.Linear(3, n_hid)
+
         self.norm = nn.LayerNorm(n_hid)
         self.node_ff = mlp(in_dim, n_hid, hidden_dim=ff_hidden, num_layers = n_mlp_layers)
+        self.line_node_ff = mlp(line_in_dim, n_hid, hidden_dim=ff_hidden, num_layers=n_mlp_layers)
         self.edge_ff = mlp(80, n_hid, hidden_dim=ff_hidden, num_layers = n_mlp_layers)
+        self.line_edge_ff = mlp(40, n_hid, hidden_dim=ff_hidden, num_layers = n_mlp_layers) 
         self.state_ff = mlp(batch_size, batch_size, hidden_dim = ff_hidden, num_layers = n_mlp_layers) 
         self.cell_ff = mlp(batch_size*9, batch_size, hidden_dim = ff_hidden, num_layers = n_mlp_layers)
         self.coord_ff = mlp(3, n_hid, hidden_dim = ff_hidden, num_layers = n_mlp_layers)
 
         for l in range(n_layers - 1):
             self.gcs.append(GeneralConv(n_hid, n_hid, n_resid_layers = n_resid_layers, n_mlp_layers = n_mlp_layers))
+            self.line_gcs.append(GeneralConv(n_hid, n_hid, n_resid_layers = n_resid_layers, n_mlp_layers = n_mlp_layers))
+            self.final_gcs.append(GeneralConv(n_hid, n_hid, n_resid_layers = n_resid_layers, n_mlp_layers = n_mlp_layers))
         self.gcs.append(GeneralConv(n_hid, n_hid, n_resid_layers = n_resid_layers, n_mlp_layers = n_mlp_layers))
+        self.line_gcs.append(GeneralConv(n_hid, n_hid, n_resid_layers=n_resid_layers, n_mlp_layers=n_mlp_layers))
+        self.final_gcs.append(GeneralConv(n_hid,n_hid,n_resid_layers=n_resid_layers,n_mlp_layers=n_mlp_layers))
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    def forward(self, node_feature, edge_index, edge_feature, global_state = None, group_size = None, cell = None, coords = None): 
+    def forward(self, node_feature, edge_index,  edge_feature, line_node_feature = None, line_edge_index = None, line_edge_feature = None, global_state = None, group_size = None, cell = None, coords = None): 
         
         node_res = self.node_ff(node_feature)
-        node_skip = self.node_linear(node_feature)
-        tot_node = node_skip + node_res
-        meta_node = self.drop(tot_node)
-        meta_node = self.norm(meta_node)       
+        meta_node = self.residual_connection(node_feature, self.node_linear, self.node_ff) 
+        meta_edge = self.residual_connection(edge_feature, self.edge_linear, self.edge_ff)
+         
+        if None not in (line_node_feature, line_edge_index, line_node_feature):
+            line_node_res = self.line_node_ff(line_node_feature)
+            line_meta_node = self.residual_connection(line_node_feature, self.line_node_linear, self.line_node_ff)
+            line_meta_edge = self.residual_connection(line_edge_feature, self.line_edge_linear, self.line_edge_ff)
+            
 
 
-        edge_res = self.edge_ff(edge_feature) 
-        edge_skip = self.edge_linear(edge_feature)
-        tot_edge = edge_skip + edge_res
-        meta_edge = self.drop(tot_edge)
-        
         if global_state is not None:
-            global_state_res = self.state_ff(global_state)
-            global_state_skip = self.state_linear(global_state)
-            tot_state = global_state_res + global_state_skip
-            tot_state = torch.repeat_interleave(tot_state, group_size).to(self.device)
-            meta_state = self.drop(tot_state) 
+            meta_state = self.residual_connection(global_state, self.state_linear, self.state_ff)
+            meta_state = torch.repeat_interleave(meta_state, group_size).to(self.device) 
         
         if cell is not None:
-            cell_res = self.cell_ff(cell)
-            cell_skip = self.cell_linear(cell)
-            tot_cell = cell_res + cell_skip
-            tot_cell = torch.repeat_interleave(tot_cell, group_size).to(self.device)
-            meta_cell = self.drop(tot_cell)
+            meta_cell = self.residual_connection(cell, self.cell_linear, self.cell_ff) 
 
         if coords is not None:
-            coords_res = self.coord_ff(coords)
-            coords_skip = self.coord_linear(coords)
-            tot_coords = coords_res + coords_skip 
-            meta_coords = self.drop(tot_coords)
+            meta_coords = self.residual_connection(coords, self.coord_linear, self.coord_ff) 
         
-        for gc in self.gcs:
-            meta_node = gc(meta_node, edge_index, meta_edge, meta_state, meta_cell, meta_coords)
-            meta_node = node_res + meta_node
-        return meta_node
+        for i in range(len(self.gcs)):
+            gc = self.gcs[i]
+            lgc = self.line_gcs[i]
+            fgc = self.final_gcs[i]
+            line_meta_node = lgc(line_meta_node, line_edge_index, line_meta_edge, None, None, None, 'line')
+            meta_node = gc(meta_node, edge_index, meta_edge, meta_state, meta_cell, meta_coords, 'crystal')
+            final_node = fgc(meta_node, edge_index, line_meta_node, meta_state, meta_cell, meta_coords,'crystal')
+            final_node = node_res + final_node #meta_node
+        return final_node
 
     def pool(self,atom_features,idx):
         assert sum([len(index) for index in idx]) == atom_features.shape[0]
         agg_feature = [torch.mean(atom_features[index], dim = 0, keepdim = True) for index in idx]
         return torch.cat(agg_feature,dim = 0)
+
+    def residual_connection(self, feature, lin_layer, ff):
+        
+        feature_res = lin_layer(feature) 
+        feature_skip = ff(feature)
+        tot_feature = feature_res + feature_skip 
+        dropped_feature = self.drop(tot_feature)
+        
+        return dropped_feature 
+
