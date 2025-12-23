@@ -45,29 +45,21 @@ class LineGraphFeaturizer:
     def get_angles(self, struct, edge_index):
         struct_angles = []
         pairs_dict = {}
-        #for ind,struct in enumerate(structures):
         source_coords = struct.cart_coords
         ids = edge_index[0]
         vals = edge_index[1]
         triplets, line_edge_index = self.get_triplets(edge_index)
-        
-        #print('common_atoms:', common_atoms)
-        #for num in common_atoms:
-        #    pairs_dict[int(num)] =[]
-        #    pairs_dict[int(num)].append(source_coords[ids[torch.where(vals==num)]] - source_coords[num])
         angles = []
 
         for src,vert,targ in triplets:
             v1 = struct.cart_coords[src] - struct.cart_coords[vert]
             v2 = struct.cart_coords[vert] - struct.cart_coords[targ]
-            #angles = []
             cos_theta = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
             cos_theta = np.clip(cos_theta, -1, 1) 
             angle = np.arccos(cos_theta)            # radians
             angles.append(angle)
-        
-            #struct_angles.append(angles_per_atom)
-        #print('len angles:',len(angles))
+            angle_deg = np.degrees(angle)
+
         return angles, line_edge_index
 
     def get_triplets(self, edge_index, num_nodes=None):
@@ -96,14 +88,11 @@ class LineGraphFeaturizer:
                         line_edge_index[0].append(j)
                         line_edge_index[1].append(k)
         line_edge_index = torch.tensor(line_edge_index)
-        #print('-'*100)
-        #print(line_edge_index)
-        #print(triplets)
         possible_nodes = []
         for trip in triplets:
             
-            node1 = sorted(trip[0:2])
-            node2 = sorted(trip[1:3])
+            node1 = trip[0:2]
+            node2 = trip[1:3]
             if node1 not in possible_nodes:
                 possible_nodes.append(node1)
             if node2 not in possible_nodes:
@@ -117,19 +106,16 @@ class LineGraphFeaturizer:
             reverse_node_dict[tuple(node)] = node_id
         line_edge_index = [[],[]]
         for trip in triplets:
-            node1 = sorted(trip[0:2])
-            node2 = sorted(trip[1:3])
+            node1 = trip[0:2]
+            node2 = trip[1:3]
             line_edge_index[0].append(reverse_node_dict[tuple(node1)])
             line_edge_index[1].append(reverse_node_dict[tuple(node2)])
-
-        #print(torch.tensor(line_edge_index))
         return triplets, torch.tensor(line_edge_index, dtype=torch.long)
 
     def angular_gaussian_basis(self, angles, centers=None, width=0.3, device=None):
-        #edge_features = []
-        #for angles in angle_lists:
+
         if centers is None:
-            centers = torch.linspace(0, torch.pi, 20, device=device)
+            centers = torch.linspace(0, torch.pi, 40, device=device)
         else:
             centers = centers.to(device)
 
@@ -138,7 +124,6 @@ class LineGraphFeaturizer:
             a = torch.as_tensor(a, device=device).float().unsqueeze(-1) # (N, 1)
             feat = torch.exp(-0.5 * ((a - centers) / width)**2)         # (N, F)
             out.append(feat)
-            #edge_features.append(out)
         return out #edge_features
 
     def get_gaussian_basis(self, index):
@@ -149,7 +134,6 @@ class LineGraphFeaturizer:
             
         angle, line_edge_index = self.get_angles(structure, edge_index)
         angle_basis = self.angular_gaussian_basis(angle)
-        #angles_bases.append(angle_basis)
         return angle_basis, line_edge_index
     
     def featurize(self):
@@ -173,15 +157,12 @@ class LineGraphFeaturizer:
 
 
 def main():
-    with open('/blue/hennig/sam.dong/dis_gnn_github/DIS-GNN/dis_gnn/data/data/df_all_elems_corrected_radial_basis.pkl','rb') as f:
+    with open('/blue/hennig/sam.dong/dis_gnn_github/DIS-GNN/dis_gnn/data/data/df_1hc_all_elems_angular_basis_12_atoms_4_cutoff_symmetries.pkl','rb') as f:
         df = pickle.load(f) 
-    #print(df['edge_index'][1])
-    
-    lgf = LineGraphFeaturizer(df, '/blue/hennig/sam.dong/dis_gnn_github/DIS-GNN/dis_gnn/data/data/line_graph_df.pkl')
-    feat = lgf.featurize()
-    #print('feat:', feat[0])
-    #print('node shapes:',[nodes[i].shape for i in range(len(nodes))])
-    #print('feat shape:', [len(feat[i]) for i in range(len(feat))])
+    print(df['structure'][0].cart_coords) 
+    lgf = LineGraphFeaturizer(df[0:2], '/blue/hennig/sam.dong/dis_gnn_github/DIS-GNN/dis_gnn/data/data/line_graph_df_test.pkl')
+    ldf = lgf.featurize()
+
 if __name__ == "__main__":
     main()
 
