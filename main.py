@@ -2,7 +2,7 @@ import yaml
 from dis_gnn.model.gnn import GNN 
 from dis_gnn.model.downstream.classifier import Classifier 
 from dis_gnn.data.featurization import GraphFeaturizer
-from dis_gnn.data.line_graph_featurizer import LineGraphFeaturizer
+from dis_gnn.data.featurization import LineGraphFeaturizer
 from dis_gnn.data.dataloader import DataLoader
 import torch
 import torch.nn as nn
