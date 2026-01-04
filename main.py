@@ -1,6 +1,6 @@
 import yaml
 from dis_gnn.model.gnn import GNN 
-from dis_gnn.model.downstream.classifier import Classifier 
+from dis_gnn.model.downstream.downstream import Classifier, Regressor 
 from dis_gnn.data.featurization import GraphFeaturizer
 from dis_gnn.data.featurization import LineGraphFeaturizer
 from dis_gnn.data.dataloader import DataLoader
@@ -22,7 +22,7 @@ import numpy as np
 from dis_gnn.utils.plotter import Plotter
 from dis_gnn.utils.logger import logger 
 from datetime import datetime
-
+import os
 
 def load_data(structures_path = None, df_path = None, ldf_path = None, batch_size = 32, property_name = 'band_gap', composition = None, num_atoms = 20, cutoff = 4.0, df_save_path = None, ldf_save_path = None):   
     if df_path is None:
@@ -55,10 +55,11 @@ def train(cfg_path):
         cfg = yaml.safe_load(f)
       # load config file
     model_cfg = cfg["model"]
+    task = model_cfg["task"]
     checkpoint_path = model_cfg["checkpoint_path"]
     batch_size = model_cfg["batch_size"]
     num_epochs = model_cfg["num_epochs"]
-    criterion = model_cfg["criterion"]
+    criterion_name = model_cfg["criterion"]
     optimizer = model_cfg["optimizer"]
     n_hid = model_cfg["n_hid"]
     lr = model_cfg["lr"]
@@ -69,7 +70,7 @@ def train(cfg_path):
     gnn_dropout = gnn_cfg["dropout"]
     gnn_n_resid_layers = gnn_cfg["n_resid_layers"]
     gnn_n_mlp_layers = gnn_cfg["n_mlp_layers"]
-    clf_cfg = model_cfg["classifier"]
+    clf_cfg = model_cfg["downstream"]
     clf_hidden_dim = clf_cfg["hidden_dim"]
     dm_cfg = cfg["data_module"]
     df_path = dm_cfg["df_path"]
@@ -89,15 +90,19 @@ def train(cfg_path):
     num = int(num*len(batched_node_features))
     num_val = len(batched_node_features) - num
 
-    if criterion == 'bce':
+    if criterion_name == 'bce':
         criterion = nn.BCELoss()
       
-
+    else: 
+        criterion = nn.L1Loss()
 
     device = "cuda" 
     gnn = GNN(in_dim, line_in_dim, n_hid, gnn_n_layers, batch_size, dropout=gnn_dropout, n_resid_layers=gnn_n_resid_layers, n_mlp_layers = gnn_n_mlp_layers).to(device)
-    classifier = Classifier(n_hid, hidden_dim=clf_hidden_dim)
-    model = nn.Sequential(gnn, classifier).to(device)
+    if task == 'classification':
+        downstream = Classifier(n_hid, hidden_dim=clf_hidden_dim)
+    else:
+        downstream = Regressor(n_hid, hidden_dim = clf_hidden_dim)
+    model = nn.Sequential(gnn, downstream).to(device)
     if optimizer == 'adam':
         optimizer = torch.optim.Adam(model.parameters(), lr = lr)
 
@@ -130,7 +135,9 @@ def train(cfg_path):
                     group_size = group_sizes, cell = cells, coords = coords, line_node_feature = flattened_line_node_features, 
                     line_edge_index = flattened_line_edge_indices, line_edge_feature = flattened_line_edge_features)
             pooled_output = gnn.pool(output, batched_node_indices[i])
-            pred = classifier(pooled_output)
+            pred = downstream(pooled_output)
+            #print('y_labels:', y_labels)
+            #print('pred:', pred)
             loss = criterion(pred, y_labels)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
@@ -150,9 +157,12 @@ def train(cfg_path):
         train_preds_binary = (train_all_preds > 0.5).float()
         train_acc = (train_preds_binary == train_all_labels).float().mean().item()
         print('[Training loss]:', np.mean(train_losses_inner))
-        print('[Training accuracy]:', train_acc)
+        if criterion_name == 'bce':
+            print('[Training accuracy]:', train_acc)
+            logger('./logs/',train_acc, stamp, desc = 'training_accuracy')
+        else:
+            pass
         logger('./logs/',np.mean(train_losses_inner), stamp, desc = 'training_loss')
-        logger('./logs/',train_acc, stamp, desc = 'training_accuracy')
         training_losses.append(np.mean(train_losses_inner))
         training_accuracy.append(train_acc)
         # --- Validation ---
@@ -182,7 +192,7 @@ def train(cfg_path):
                         line_edge_feature = flattened_line_edge_features_val)
 
                 output_val = gnn.pool(output_val, batched_node_indices[num + i])
-                pred_val = classifier(output_val)
+                pred_val = downstream(output_val)
                 loss_val = criterion(pred_val, y_labels_val)
                 validation_losses_inner.append(loss_val.item())
                 validation_predictions_inner.append(pred_val.detach().cpu())
@@ -197,12 +207,15 @@ def train(cfg_path):
             val_acc = (val_preds_binary == val_all_labels).float().mean().item()
             #val_accuracies.append(val_acc)
             print('[Validation loss]:', np.mean(validation_losses_inner))
-            print('[Validation accuracy]:', val_acc)
+            if criterion_name == 'bce':
+                print('[Validation accuracy]:', val_acc)
+                logger('./logs/',val_acc, stamp, desc = 'validation_accuracy')
             logger('./logs/',np.mean(validation_losses_inner), stamp, desc = 'validation_loss')
-            logger('./logs/',val_acc, stamp, desc = 'validation_accuracy')
             validation_losses.append(np.mean(validation_losses_inner))
             validation_accuracy.append(np.mean(val_acc))
     
+    torch.save(model.state_dict(), os.path.join(checkpoint_path,stamp + '.pt')) 
+    print(f'successfully saved model {stamp} to {checkpoint_path}')
     return training_losses, training_accuracy, validation_losses, validation_accuracy      
 
 def main():
@@ -213,10 +226,10 @@ def main():
             required=True,
             help="Path to YAML config file"
     )
-    parser.add_argument("--save_plot",
+    parser.add_argument("--ckpt_path",
               type=str,
               required=False,
-              help="directory to save parity plots"
+              help="path to saved model"
               )
     args = parser.parse_args()
     #data = load_data(df_path = '/blue/hennig/sam.dong/disordered_classifier/data/graph_df_4_cutoff_12_atoms_100_mev.pkl') 
