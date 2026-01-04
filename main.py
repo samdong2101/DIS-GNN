@@ -232,11 +232,8 @@ def main():
               help="path to saved model"
               )
     args = parser.parse_args()
-    #data = load_data(df_path = '/blue/hennig/sam.dong/disordered_classifier/data/graph_df_4_cutoff_12_atoms_100_mev.pkl') 
     training_losses, training_accuracy, validation_losses, validation_accuracy = train(args.config)
-    plotter = Plotter(args.save_plot)
-    plotter.plot_losses(training_losses, validation_losses) 
-    plotter.plot_accuracies(training_accuracy, validation_accuracy)
+
 
 if __name__ == "__main__":
     main()
