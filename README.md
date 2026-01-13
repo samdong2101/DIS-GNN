@@ -3,7 +3,7 @@
 # Getting DIS-GNN
 
 ## 1. Create Conda Environment
-- While not mandatory, we recommend creating a clean conda environment before installing DEEP-GASP to avoid potential package conflicts. You can create and activate a conda environment with the following commands:
+- While not mandatory, we recommend creating a clean conda environment before installing DIS-GNN to avoid potential package conflicts. You can create and activate a conda environment with the following commands:
 - ```conda create -n deep_gasp python=3.12```
 ### Activate the environment
 - ```conda activate deep_gasp```
