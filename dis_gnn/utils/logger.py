@@ -19,4 +19,6 @@ def logger(path, value, stamp, desc=None, config_path = './dis_gnn/config/config
     with open(file_path, "a") as f:
         f.write(str(value) + "\n")
     
-    shutil.copy(config_path, root_path)
+    config_dest = os.path.join(root_path, os.path.basename(config_path))
+    if not os.path.exists(config_dest):
+        shutil.copy(config_path, config_dest)
