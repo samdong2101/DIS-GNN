@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import torch
-
+import psutil
 from pymatgen.core import Lattice, Structure, Molecule, Element
 from pymatgen.io.vasp.outputs import Poscar
 from pymatgen.transformations.standard_transformations import RotationTransformation
@@ -38,8 +38,8 @@ def filter_by_elements(data, symbols=None):
 class GraphFeaturizer:
     def __init__(self, structures, cutoff = 4.0, property_name = 'band_gap', composition = None, num_atoms = 12, e_above_hull = 0.1, save_path = None):
         self.structures = filter_by_elements(structures, composition)
-        self.ind = [i for i,structure in enumerate(self.structures) if len(structure['structure']['sites']) <= num_atoms and structure['energy_above_hull'] is not None and
-    structure['energy_above_hull'] <= e_above_hull]
+        self.ind = [i for i,structure in enumerate(self.structures) if len(structure['structure']['sites']) <= num_atoms and structure['energy_above_hull'] is not None and structure['energy_above_hull'] <= e_above_hull]
+        #self.ind = [i for i,structure in enumerate(self.structures) if len(structure['structure']['sites']) <= num_atoms]
         self.structs = [Structure.from_dict(self.structures[i]['structure']) for i in self.ind]
         self.structs = [s * [2, 2, 1] if len(s) <= 2 else s for s in self.structs]
         self.properties = [self.structures[i][property_name] for i in self.ind]
@@ -224,6 +224,8 @@ class LineGraphFeaturizer:
         self.save_path = save_path
 
     def get_node_features(self,index):
+        #if index % 1000 == 0:
+        #    print(index, psutil.Process().memory_info().rss / 1e9, "GB")
         return torch.tensor(self.df['edge_feature'][index]), self.df['structure'][index]
 
     def get_angles(self, struct, edge_index):
@@ -318,19 +320,30 @@ class LineGraphFeaturizer:
 
         angle, line_edge_index = self.get_angles(structure, edge_index)
         angle_basis = self.angular_gaussian_basis(angle)
+        angle_basis = torch.tensor(np.array(angle_basis))
         return angle_basis, line_edge_index
 
     def featurize(self):
         df = []
         for ind in tqdm(range(len(self.df)),desc = 'featurizing line graph'):
+            #if ind % 1000 == 0:
+            #    print('before node feature')
+            #    print(ind, psutil.Process().memory_info().rss / 1e9, "GB")
             line_node_feature, structure = self.get_node_features(ind)
+            #if ind % 1000 == 0:
+            #    print('before node feature')
+            #    print(ind, psutil.Process().memory_info().rss / 1e9, "GB")
             line_edge_feature, line_edge_index = self.get_gaussian_basis(ind)
+            #if ind % 1000 == 0:
+            #    print('after node feature')
+            #    print(ind, psutil.Process().memory_info().rss / 1e9, "GB")
             df.append({
                         'id': ind,
                         'structure': structure,
                         'line_edge_index': line_edge_index,
                         'line_node_feature': line_node_feature,
                         'line_edge_feature':line_edge_feature})
+            del line_edge_index, line_node_feature, line_edge_feature
         df = pd.DataFrame(df)
         print(f'df has {len(df)} datapoints')
         if self.save_path is not None:
