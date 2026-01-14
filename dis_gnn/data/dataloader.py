@@ -33,24 +33,29 @@ def calculate_bce_baseline(proportion_positive: float) -> float:
 
 
 class DataLoader:
-  def __init__(self, df, batch_size = 32, graphtype = 'crystal'):
+  def __init__(self, df, batch_size = 32, graphtype = 'crystal', task = 'classification', property_name = 'band_gap'):
     self.df = df
     self.batch_size = batch_size
-    self.graphtype = graphtype    
+    self.graphtype = graphtype   
+    self.task = task
+    self.property_name = property_name
   def load_data(self, df):
     if self.graphtype == 'crystal':
         node_features = [i for i in df['node_feature']]
         edge_indices = [i for i in df['edge_index']]
-        band_gaps = [i for i in df['band_gap']]
+        labels_list = [i for i in df[self.property_name]]
         edge_features = [i for i in df['edge_feature']]
-        labels = [0 if bg == 0 else 1 for bg in band_gaps]
+        if self.task == 'classification':
+            labels = [0 if bg == 0 or np.isnan(bg) else 1 for bg in labels_list]
+        else:
+            labels = [0 if bg == 0 or np.isnan(bg) else bg for bg in labels_list]
         structures = [i for i in df['structure']]
         cells = [torch.tensor(i.lattice.matrix).flatten() for i in structures]
         coords = [torch.tensor(i.frac_coords) for i in structures]
         frac = sum(labels)/len(labels)
         baseline = calculate_bce_baseline(frac)
         print('BASELINE BCE LOSS:',baseline)
-        return node_features,edge_indices, band_gaps, edge_features, labels, structures, cells, coords
+        return node_features,edge_indices, labels_list, edge_features, labels, structures, cells, coords
     else:
         node_features = [i for i in df['line_node_feature']]
         edge_indices = [i for i in df['line_edge_index']]
@@ -199,7 +204,7 @@ class DataLoader:
             return batched_node_features, batched_edge_indices, batched_edge_features
   def get_data(self):
     if self.graphtype == 'crystal':
-        node_features, edge_indices, band_gaps, edge_features, labels, structures, cells, coords = self.load_data(self.df)
+        node_features, edge_indices, labels_list, edge_features, labels, structures, cells, coords = self.load_data(self.df)
         batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords = self.batch_data(self.batch_size, node_features, edge_indices, edge_features, labels, cells, coords)
         return batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords
     else:
