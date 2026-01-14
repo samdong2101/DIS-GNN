@@ -1,1 +1,1 @@
-python -m main --config ./dis_gnn/config/config.yaml --save_plot ./plots
+python -m main --config ./dis_gnn/config/config.yaml
