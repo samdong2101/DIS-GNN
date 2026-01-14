@@ -66,18 +66,20 @@ def main():
     )
     cwd = os.getcwd()
     for i in os.listdir(cwd):
-        root_dir = os.path.join(cwd,i)
-        if os.path.isdir(root_dir):
-            plotter(root_dir,'training_accuracy.txt', 'validation_accuracy.txt', root_dir, desc = 'accuracy', ext = 'png')
-            plotter(root_dir,'training_loss.txt', 'validation_loss.txt', root_dir, desc = 'loss', ext = 'png')
-        else:
+        try:
+            root_dir = os.path.join(cwd,i)
+            if os.path.isdir(root_dir):
+                try:
+                    plotter(root_dir,'training_accuracy.txt', 'validation_accuracy.txt', root_dir, desc = 'accuracy', ext = 'png')
+                except:
+                    pass
+                plotter(root_dir,'training_loss.txt', 'validation_loss.txt', root_dir, desc = 'loss', ext = 'png')
+            else:
+                pass
+        except Exception as e:
+            print(f'error in {i} with error {e}')
             pass
 
-    #args = parser.parse_args()
-    #plotter(args.root_dir,'training_accuracy.txt', 'validation_accuracy.txt', args.root_dir, desc='accuracy', ext='png')
-    #plotter(args.root_dir,'validation_accuracy.txt', args.root_dir, desc='accuracy', ext='png')
-    #plotter(args.root_dir,'training_loss.txt','validation_loss.txt', args.root_dir, desc='loss', ext='png')
-    #plotter(args.root_dir,'validation_loss.txt', args.root_dir, desc='loss', ext='png')
 
 if __name__ == "__main__":
     main()
