@@ -1,26 +1,28 @@
 data_module:
-  df_path: '/blue/hennig/sam.dong/dis_gnn_github/DIS-GNN/dis_gnn/data/data/df_all_elems_angular_basis_12_atoms_4_cutoff_symmetries.pkl'  
-  ldf_path: '/blue/hennig/sam.dong/dis_gnn_github/DIS-GNN/dis_gnn/data/data/line_graph_df.pkl' 
-  composition: null
+  df_path: null #'/blue/hennig/sam.dong/dis_gnn_github/DIS-GNN/dis_gnn/data/data/df_all_elems_angular_basis_12_atoms_4_cutoff_symmetries.pkl'  
+  ldf_path: null #'/blue/hennig/sam.dong/dis_gnn_github/DIS-GNN/dis_gnn/data/data/line_df.pkl' 
+  composition: null #['Ga','N','Al'] 
   structures_path: '/blue/hennig/sam.dong/mp_api/mp_api_09_25_2025.pkl'
-  cutoff: 4.0
+  cutoff: 5.0
   num_atoms: 12
-  property_name: 'band_gap'
-  df_save_path: '/blue/hennig/sam.dong/dis_gnn_github/DIS-GNN/dis_gnn/data/data/df_1hc_all_elems_angular_basis_12_atoms_4_cutoff_symmetries.pkl'
-  ldf_save_path: '/blue/hennig/sam.dong/dis_gnn_github/DIS-GNN/dis_gnn/data/data/ldf.pkl'
+  property_name: 'energy_per_atom'
+  df_save_path: '/blue/hennig/sam.dong/dis_gnn_github/DIS-GNN/dis_gnn/data/data/test_df.pkl' #df_1hc_all_elems_angular_basis_12_atoms_4_cutoff_symmetries.pkl'
+  ldf_save_path: '/blue/hennig/sam.dong/dis_gnn_github/DIS-GNN/dis_gnn/data/data/test_ldf.pkl'
 model:
-  checkpoint_path: '/blue/hennig/sam.dong/disordered_gnn/checkpoints/'
+  task: 'regression'
+  checkpoint_path: '/blue/hennig/sam.dong/dis_gnn_github/DIS-GNN/checkpoints/'
   batch_size: 1
-  num_epochs: 1500
-  criterion: 'bce'
+  num_epochs: 600
+  criterion: 'mae'
   optimizer: 'adam'
-  lr: 0.00000005
+  lr: 0.000025
   test_val_split: 0.9
-  n_hid: 64
+  n_hid: 32
   gnn:
     n_layers: 3
     dropout: 0.5
     n_resid_layers: 3
     n_mlp_layers: 3
-  classifier:
+  downstream:
     hidden_dim: 32
+
