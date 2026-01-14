@@ -56,7 +56,6 @@ class GNN(nn.Module):
             line_meta_edge = self.residual_connection(line_edge_feature, self.line_edge_linear, self.line_edge_ff)
             
 
-
         if global_state is not None:
             meta_state = self.residual_connection(global_state, self.state_linear, self.state_ff)
             meta_state = torch.repeat_interleave(meta_state, group_size).to(self.device) 
