@@ -24,7 +24,7 @@ from dis_gnn.utils.logger import logger
 from datetime import datetime
 import os
 
-def load_data(structures_path = None, df_path = None, ldf_path = None, batch_size = 32, property_name = 'band_gap', composition = None, num_atoms = 20, cutoff = 4.0, df_save_path = None, ldf_save_path = None):   
+def load_data(structures_path = None, df_path = None, ldf_path = None, batch_size = 32, property_name = 'band_gap', composition = None, num_atoms = 20, cutoff = 4.0, df_save_path = None, ldf_save_path = None, task = 'classification'):   
     if df_path is None:
         with open(structures_path,'rb') as f:
             structures = pickle.load(f)
@@ -32,8 +32,8 @@ def load_data(structures_path = None, df_path = None, ldf_path = None, batch_siz
         df = gf.featurize()
         lgf = LineGraphFeaturizer(df, save_path=ldf_save_path)
         ldf = lgf.featurize() 
-        dl = DataLoader(df, batch_size = batch_size, graphtype='crystal')
-        ldl = DataLoader(ldf, batch_size = batch_size, graphtype='line')
+        dl = DataLoader(df, batch_size = batch_size, graphtype='crystal', task = task, property_name = property_name)
+        ldl = DataLoader(ldf, batch_size = batch_size, graphtype='line', task = task, property_name = property_name)
         batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords = dl.get_data()
         batched_line_node_features, batched_line_edge_indices, batched_line_edge_features = ldl.get_data() 
     else:
@@ -41,8 +41,8 @@ def load_data(structures_path = None, df_path = None, ldf_path = None, batch_siz
             df = pickle.load(f)
         with open(ldf_path, 'rb') as f:
             ldf = pickle.load(f) 
-        dl = DataLoader(df, batch_size = batch_size, graphtype='crystal')
-        ldl = DataLoader(ldf, batch_size = batch_size, graphtype='line')
+        dl = DataLoader(df, batch_size = batch_size, graphtype='crystal', task = task, property_name = property_name)
+        ldl = DataLoader(ldf, batch_size = batch_size, graphtype='line', task = task, property_name = property_name)
         batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords = dl.get_data()
         batched_line_node_features, batched_line_edge_indices, batched_line_edge_features = ldl.get_data()
         #print('batched_coords:', batched_coords)
@@ -82,9 +82,10 @@ def train(cfg_path):
     logger('./logs/','starting run...', stamp)
     data = load_data(df_path = df_path, ldf_path = ldf_path, structures_path = structures_path, batch_size = batch_size, 
         composition = composition, num_atoms = num_atoms,  property_name = dm_cfg['property_name'], 
-        df_save_path = dm_cfg["df_save_path"], ldf_save_path = dm_cfg["ldf_save_path"], cutoff = dm_cfg["cutoff"])
+        df_save_path = dm_cfg["df_save_path"], ldf_save_path = dm_cfg["ldf_save_path"], cutoff = dm_cfg["cutoff"], task = task)
     
     batched_node_features, batched_edge_indices, batched_edge_features, batched_target_values, batched_node_indices, batched_group_sizes, batched_cells, batched_coords, batched_line_node_features, batched_line_edge_indices, batched_line_edge_features = data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8], data[9], data[10]    
+    print('batched_target_values:',np.max(batched_target_values))
     in_dim = batched_node_features[0].shape[1]
     line_in_dim = batched_line_node_features[0].shape[1]
     num = int(num*len(batched_node_features))
@@ -232,8 +233,11 @@ def main():
               help="path to saved model"
               )
     args = parser.parse_args()
+    #data = load_data(df_path = '/blue/hennig/sam.dong/disordered_classifier/data/graph_df_4_cutoff_12_atoms_100_mev.pkl') 
     training_losses, training_accuracy, validation_losses, validation_accuracy = train(args.config)
-
+    plotter = Plotter(args.save_plot)
+    plotter.plot_losses(training_losses, validation_losses) 
+    plotter.plot_accuracies(training_accuracy, validation_accuracy)
 
 if __name__ == "__main__":
     main()
