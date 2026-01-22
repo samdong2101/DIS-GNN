@@ -1,18 +1,19 @@
 data_module:
   df_path: null 
+  ldf_path: null 
   composition: null 
   structures_path: '/blue/hennig/sam.dong/mp_api/mp_api_09_25_2025.pkl'
-  cutoff: 5.0
-  num_atoms: 12
-  property_name: 'energy_per_atom'
-  df_save_path: './dis_gnn/data/data/test_df.pkl'
-  ldf_save_path: './DIS-GNN/dis_gnn/data/data/test_ldf.pkl'
+  cutoff: 6.0
+  num_atoms: 1000
+  property_name: 'band_gap'
+  df_save_path: '/blue/hennig/sam.dong/dis_gnn_github/DIS-GNN/dis_gnn/data/data/test_df.pkl' 
+  ldf_save_path: '/blue/hennig/sam.dong/dis_gnn_github/DIS-GNN/dis_gnn/data/data/test_ldf.pkl'
 model:
   task: 'regression'
   checkpoint_path: '/blue/hennig/sam.dong/dis_gnn_github/DIS-GNN/checkpoints/'
   batch_size: 1
-  num_epochs: 600
-  criterion: 'mae'
+  num_epochs: 1000
+  criterion: 'l1'
   optimizer: 'adam'
   lr: 0.000025
   test_val_split: 0.9
