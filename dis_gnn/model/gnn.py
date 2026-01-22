@@ -34,8 +34,8 @@ class GNN(nn.Module):
         self.state_ff = mlp(batch_size, batch_size, hidden_dim = ff_hidden, num_layers = n_mlp_layers) 
         self.cell_ff = mlp(batch_size*9, batch_size, hidden_dim = ff_hidden, num_layers = n_mlp_layers)
         self.coord_ff = mlp(3, n_hid, hidden_dim = ff_hidden, num_layers = n_mlp_layers)
-
-        for l in range(n_layers - 1):
+        self.alpha = nn.Parameter(torch.ones(n_hid))
+        for l in range(n_layers - 1):   
             self.gcs.append(GeneralConv(n_hid, n_hid, n_resid_layers = n_resid_layers, n_mlp_layers = n_mlp_layers))
             self.line_gcs.append(GeneralConv(n_hid, n_hid, n_resid_layers = n_resid_layers, n_mlp_layers = n_mlp_layers))
             self.final_gcs.append(GeneralConv(n_hid, n_hid, n_resid_layers = n_resid_layers, n_mlp_layers = n_mlp_layers))
@@ -73,7 +73,9 @@ class GNN(nn.Module):
             line_meta_node = lgc(line_meta_node, line_edge_index, line_meta_edge, None, None, None, 'line')
             meta_node = gc(meta_node, edge_index, meta_edge, meta_state, meta_cell, meta_coords, 'crystal')
             final_node = fgc(meta_node, edge_index, line_meta_node, meta_state, meta_cell, meta_coords,'crystal')
-            final_node = node_res + final_node #meta_node
+            alpha = F.relu(self.alpha) #torch.sigmoid(self.alpha)
+            #print(alpha)
+            final_node = alpha * node_res + final_node #meta_node
         return final_node
 
     def pool(self,atom_features,idx):
