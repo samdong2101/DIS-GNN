@@ -44,9 +44,7 @@ def load_data(structures_path = None, df_path = None, ldf_path = None, batch_siz
         dl = DataLoader(df, batch_size = batch_size, graphtype='crystal', task = task, property_name = property_name)
         ldl = DataLoader(ldf, batch_size = batch_size, graphtype='line', task = task, property_name = property_name)
         batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords = dl.get_data()
-        batched_line_node_features, batched_line_edge_indices, batched_line_edge_features = ldl.get_data()
-        #print('batched_coords:', batched_coords)
-        #print('batched_coords shape:', [i.shape for i in batched_coords])
+        batched_line_node_features, batched_line_edge_indices, batched_line_edge_features = ldl.get_data() 
     return batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords, batched_line_node_features, batched_line_edge_indices, batched_line_edge_features
 
 
@@ -64,7 +62,7 @@ def train(cfg_path):
     n_hid = model_cfg["n_hid"]
     lr = model_cfg["lr"]
     test_val_split = model_cfg["test_val_split"]
-    num = model_cfg['test_val_split']
+    split = model_cfg['test_val_split']
     gnn_cfg = model_cfg["gnn"]
     gnn_n_layers = gnn_cfg["n_layers"]
     gnn_dropout = gnn_cfg["dropout"]
@@ -88,7 +86,7 @@ def train(cfg_path):
     print('batched_target_values:',np.max(batched_target_values))
     in_dim = batched_node_features[0].shape[1]
     line_in_dim = batched_line_node_features[0].shape[1]
-    num = int(num*len(batched_node_features))
+    num = int(split*len(batched_node_features))
     num_val = len(batched_node_features) - num
 
     if criterion_name == 'bce':
@@ -119,16 +117,11 @@ def train(cfg_path):
         #description = f'changing {variable_name} FROM {old_variable} TO {variable} --> {epoch} epoch'
         for i in tqdm(range(num), desc = f'Epoch {epoch+1}/{num_epochs}'):
             optimizer.zero_grad(set_to_none=True)
-            
-                  # --- Move only current batch to GPU ---
-            flattened_node_features, flattened_edge_indices, flattened_edge_features = batched_node_features[i].to(device), batched_edge_indices[i].to(device), batched_edge_features[i].to(device=device,dtype=torch.float32) #torch.tensor(batched_edge_features[i], dtype=torch.float32, device=device)
-            
-
+            flattened_node_features, flattened_edge_indices, flattened_edge_features = batched_node_features[i].to(device), batched_edge_indices[i].to(device), batched_edge_features[i].to(device=device,dtype=torch.float32)
             flattened_line_node_features, flattened_line_edge_indices, flattened_line_edge_features = batched_line_node_features[i].to(dtype=torch.float32, device=device), batched_line_edge_indices[i].to(device), batched_line_edge_features[i].to(device=device,dtype=torch.float32)
             cells, coords = batched_cells[i].to(dtype=torch.float32, device = device), batched_coords[i].to(dtype=torch.float32, device=device)
             
             y_labels = batched_target_values[i].to(dtype=torch.float32, device=device).reshape(batch_size, 1)      
-            #state = torch.repeat_interleave(batched_target_values[i], batched_group_sizes[i]).to(dtype=torch.float32, device = device) #batched_target_values[i].to(dtype=torch.float32, device=device)
             group_sizes = batched_group_sizes[i].to(device = device)
             state = batched_target_values[i].to(dtype=torch.float32, device=device)
             state = torch.zeros_like(state).to(dtype = torch.float32, device=device)
@@ -137,8 +130,7 @@ def train(cfg_path):
                     line_edge_index = flattened_line_edge_indices, line_edge_feature = flattened_line_edge_features)
             pooled_output = gnn.pool(output, batched_node_indices[i])
             pred = downstream(pooled_output)
-            #print('y_labels:', y_labels)
-            #print('pred:', pred)
+            #print('pred shape:', pred.shape)
             loss = criterion(pred, y_labels)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
@@ -147,10 +139,7 @@ def train(cfg_path):
                   
             train_losses_inner.append(loss.item())
             train_predictions_inner.append(pred.detach().cpu())
-            train_labels_inner.append(y_labels.detach().cpu())
-            #scheduler.step()
-            # --- Detach and move to CPU to save GPU memory ---
-            # Free memory for this batch
+            train_labels_inner.append(y_labels.detach().cpu()) 
             del output, pooled_output, pred, y_labels
         torch.cuda.empty_cache()
         train_all_preds = torch.cat(train_predictions_inner, dim=0)
@@ -181,17 +170,13 @@ def train(cfg_path):
                 flattened_line_edge_features_val = batched_line_edge_features[num + i].to(dtype=torch.float32, device=device)
 
                 y_labels_val = batched_target_values[num + i].to(dtype=torch.float32, device=device).reshape(batch_size, 1)
-                        #state_val = torch.repeat_interleave(batched_target_values[num + i], batched_group_sizes[num + i]).to(dtype=torch.float32, device = device)
                 state_val = batched_target_values[num+i].to(dtype=torch.float32, device=device)
-
                 cells_val, coords_val = batched_cells[num+i].to(dtype=torch.float32, device=device), batched_coords[num+i].to(dtype=torch.float32, device=device)
-
                 group_sizes_val = batched_group_sizes[num + i].to(device = device)
                 output_val = gnn(flattened_node_features_val, flattened_edge_indices_val, flattened_edge_features_val, 
                         global_state = state_val, group_size = group_sizes_val, cell = cells_val, coords = coords_val,
                         line_node_feature = flattened_line_node_features_val, line_edge_index = flattened_line_edge_indices_val, 
                         line_edge_feature = flattened_line_edge_features_val)
-
                 output_val = gnn.pool(output_val, batched_node_indices[num + i])
                 pred_val = downstream(output_val)
                 loss_val = criterion(pred_val, y_labels_val)
@@ -204,9 +189,7 @@ def train(cfg_path):
             val_all_preds = torch.cat(validation_predictions_inner, dim=0)
             val_all_labels = torch.cat(validation_labels_inner, dim=0)
             val_preds_binary = (val_all_preds > 0.5).float()
-            #validation_losses_outer.append(validation_losses_inner)
             val_acc = (val_preds_binary == val_all_labels).float().mean().item()
-            #val_accuracies.append(val_acc)
             print('[Validation loss]:', np.mean(validation_losses_inner))
             if criterion_name == 'bce':
                 print('[Validation accuracy]:', val_acc)
@@ -214,8 +197,14 @@ def train(cfg_path):
             logger('./logs/',np.mean(validation_losses_inner), stamp, desc = 'validation_loss')
             validation_losses.append(np.mean(validation_losses_inner))
             validation_accuracy.append(np.mean(val_acc))
-    
-    torch.save(model.state_dict(), os.path.join(checkpoint_path,stamp + '.pt')) 
+        
+        ckpt_path = os.path.join(checkpoint_path, stamp)
+        os.makedirs(os.path.join(ckpt_path), exist_ok = True)
+        if epoch%25 == 0:
+            torch.save(model.state_dict(), os.path.join(ckpt_path, stamp +f'_{epoch}_epochs.pt'))
+        
+
+    torch.save(model.state_dict(), os.path.join(checkpoint_path,stamp + '_final.pt')) 
     print(f'successfully saved model {stamp} to {checkpoint_path}')
     return training_losses, training_accuracy, validation_losses, validation_accuracy      
 
@@ -233,7 +222,6 @@ def main():
               help="path to saved model"
               )
     args = parser.parse_args()
-    #data = load_data(df_path = '/blue/hennig/sam.dong/disordered_classifier/data/graph_df_4_cutoff_12_atoms_100_mev.pkl') 
     training_losses, training_accuracy, validation_losses, validation_accuracy = train(args.config)
     plotter = Plotter(args.save_plot)
     plotter.plot_losses(training_losses, validation_losses) 
