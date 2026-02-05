@@ -13,5 +13,6 @@
 - ```git clone https://github.com/samdong2101/DIS-GNN.git```
 ## 3. Install required packages
 - ```pip install -r requirements.txt```
-
+## 3. Using dis-GNN
+- via the usage file, to train a model run ```python -m main --config ./dis_gnn/config/config.yaml```
 
