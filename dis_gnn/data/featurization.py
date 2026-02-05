@@ -17,6 +17,7 @@ from pymatgen.transformations.standard_transformations import RotationTransforma
 import pickle
 import string
 from pyxtal.symmetry import Group, index_from_letter
+from ase.data import atomic_masses
 
 def filter_by_elements(data, symbols=None):
     if symbols is None:
@@ -47,6 +48,7 @@ class GraphFeaturizer:
         self.property_name = property_name
         self.save_path = save_path
     def create_adjacency_matrices(self, structure, cutoff):
+        begin = time.time()
         num_atoms = len(structure)
         init_adjacency = np.zeros((num_atoms,num_atoms))
         distance_mat = structure.distance_matrix
@@ -57,6 +59,8 @@ class GraphFeaturizer:
         row, col = np.where(init_adjacency == 1)
         edge_index = torch.tensor([row,col])
         edge_type = torch.ones_like(edge_index[0])
+        end = time.time()
+        #print('create_adjacency_matrices:', end - begin)
         return init_adjacency,edge_index,edge_type
     def create_node_features_old(self, structure):
         groups = {
@@ -103,16 +107,20 @@ class GraphFeaturizer:
         return new_node,node_types
 
     def create_node_features(self, structure):
+        begin = time.time()
         node_features = []
         for i in range(len(structure)):
             node_init = np.zeros(118)
-            node_init[structure.atomic_numbers[i]] = 1
+            node_init[structure.atomic_numbers[i]] = 1 #* atomic_masses[structure.atomic_numbers[i]]
             node_features.append(node_init)
 
         node_types = None
+        end = time.time()
+        #print('create_node_features time:',end-begin)
         return torch.tensor(node_features).to(dtype=torch.float32), node_types
 
     def create_edge_features(self, structure,adjacency_matrix):
+        begin = time.time()
         bond_distances = []
         edge_features = []
         start_time = time.time()
@@ -127,9 +135,13 @@ class GraphFeaturizer:
         edge_feature = gauss 
         edge_features.append(edge_feature)
         bond_distances.append(bond_lengths)
+        end = time.time()
+        #print('create_edge_features time:', end-begin)
         return torch.tensor(edge_feature)
 
+
     def get_angles(self, struct, edge_index):
+        begin = time.time()
         struct_angles = []
         pairs_dict = {}
         source_coords = struct.cart_coords
@@ -154,6 +166,8 @@ class GraphFeaturizer:
                     angle = np.arccos(cos_theta)            # radians
                     angles.append(angle)
                 angles_per_atom.append(torch.mean(torch.tensor(angles)))# degrees
+        end = time.time()
+        #print('get_angles time:', begin-end)
         return angles_per_atom
     
     def angular_gaussian_basis(self, angles, centers=None, width=0.3, device=None):
@@ -186,14 +200,11 @@ class GraphFeaturizer:
             if torch.tensor(edge_feature).shape != angular_basis.shape:
                 continue
             edge_attr = torch.concat([torch.tensor(edge_feature),angular_basis],dim = 1)
-            
+            #edge_attr = torch.tensor(edge_feature)
             try:
                 edge_index[0].max()+1
-            except:
-                print('structure:', structure)
-                print('adjacency_matrix:', adjacency_matrix)
-                print('edge index:',edge_index)
-                print(alksdjf)
+            except Exception as e:
+                print(e)
             #assert edge_index[0].max()+1 == node_feature.shape[0], f"{edge_index[0].max()} != {node_feature.shape}, {adjacency_matrix}"
             if edge_index[0].max()+1 != node_feature.shape[0]:
                 continue
@@ -326,17 +337,8 @@ class LineGraphFeaturizer:
     def featurize(self):
         df = []
         for ind in tqdm(range(len(self.df)),desc = 'featurizing line graph'):
-            #if ind % 1000 == 0:
-            #    print('before node feature')
-            #    print(ind, psutil.Process().memory_info().rss / 1e9, "GB")
-            line_node_feature, structure = self.get_node_features(ind)
-            #if ind % 1000 == 0:
-            #    print('before node feature')
-            #    print(ind, psutil.Process().memory_info().rss / 1e9, "GB")
-            line_edge_feature, line_edge_index = self.get_gaussian_basis(ind)
-            #if ind % 1000 == 0:
-            #    print('after node feature')
-            #    print(ind, psutil.Process().memory_info().rss / 1e9, "GB")
+            line_node_feature, structure = self.get_node_features(ind) 
+            line_edge_feature, line_edge_index = self.get_gaussian_basis(ind) 
             df.append({
                         'id': ind,
                         'structure': structure,
