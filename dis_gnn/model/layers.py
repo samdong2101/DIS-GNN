@@ -94,4 +94,46 @@ class GatedMLP(nn.Module):
         return self.out_layer(x)
 
 
+class GATLayer(nn.Module):
+    def __init__(self, in_features, out_features, dropout = 0.6, alpha = 0.2):
+        super(GATLayer, self).__init__()
+
+        self.W = nn.Linear(in_features, out_features, bias = False) 
+        
+        self.a = nn.Linear(out_features*2, 1, bias = False)
+        
+        self.leakyrelu = nn.LeakyReLU(alpha) 
+
+        self.dropout = nn.Dropout(dropout) 
+
+    def forward(self, node, edge_index): 
+
+        transformed_node = self.W(node)
+        N = node.size(0)
+
+        source_idx, target_idx = edge_index
+        node_i = transformed_node[source_idx]
+        node_j = transformed_node[target_idx]
+        combined_nodes = torch.cat([node_i, node_j], dim = 1) 
+        raw_attention = self.leakyrelu(self.a(combined_nodes)).squeeze()
+
+        attention = self.edge_softmax(raw_attention, source_idx, N) 
+        attention = self.dropout(attention) 
+        
+        out = torch.zeros_like(transformed_node)
+        out.index_add_(0, source_idx, attention.view(-1, 1) * node_j)
+
+        return out
+
+    def edge_softmax(self, logits, index, num_nodes): 
+
+        logits_max = torch.zeros(num_nodes).to(logits.device)
+        logits_max.index_reduce_(0, index, logits, reduce = 'amax', include_self = False)
+
+        exp = (logits - logits_max[index]).exp()
+        sum_exp = torch.zeros(num_nodes).to(logits.device)
+        sum_exp.index_add_(0, index, exp) 
+        
+        return exp / (sum_exp[index] + 1e-10)
+
 
