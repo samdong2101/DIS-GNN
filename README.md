@@ -6,9 +6,9 @@
 
 ## 1. Create Conda Environment
 - While not mandatory, we recommend creating a clean conda environment before installing DIS-GNN to avoid potential package conflicts. You can create and activate a conda environment with the following commands:
-- ```conda create -n deep_gasp python=3.12```
+- ```conda create -n dis_gnn python=3.12```
 ### Activate the environment
-- ```conda activate deep_gasp```
+- ```conda activate dis_gnn```
 
 ## 2. Install required packages
 - ```pip install -r requirements.txt```
