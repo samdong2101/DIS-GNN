@@ -9,9 +9,11 @@
 - ```conda create -n dis_gnn python=3.12```
 ### Activate the environment
 - ```conda activate dis_gnn```
+- 
+## 2. Install from source
+- ```git clone https://github.com/samdong2101/DIS-GNN.git```
 
-## 2. Install required packages
+## 3. Install required packages
 - ```pip install -r requirements.txt```
 
-## 3. Install from source
-- ```git clone https://github.com/samdong2101/DIS-GNN.git```
+
