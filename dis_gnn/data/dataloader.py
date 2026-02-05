@@ -1,8 +1,8 @@
 import numpy as np
 import torch
 import pandas as pd
-
-
+import pickle
+from .featurization import GraphFeaturizer, LineGraphFeaturizer 
 def calculate_bce_baseline(proportion_positive: float) -> float:
     """
     Calculates the Binary Cross-Entropy (BCE) loss for the prior probability 
@@ -29,6 +29,48 @@ def calculate_bce_baseline(proportion_positive: float) -> float:
     baseline_loss = - (p * np.log(p) + (1 - p) * np.log(1 - p))
     
     return baseline_loss
+
+
+
+def load_data(structures_path = None, df_path = None, ldf_path = None, batch_size = 32, property_name = 'band_gap', composition = None, num_atoms = 20, cutoff = 4.0, df_save_path = None, ldf_save_path = None, task = 'classification'): 
+    if df_path is None:
+        with open(structures_path,'rb') as f:
+            structures = pickle.load(f)
+        gf = GraphFeaturizer(structures, cutoff, property_name, composition = composition, num_atoms = num_atoms, save_path = df_save_path)
+        df = gf.featurize()
+        lgf = LineGraphFeaturizer(df, save_path=ldf_save_path)
+        ldf = lgf.featurize()
+        dl = DataLoader(df, batch_size = batch_size, graphtype='crystal', task = task, property_name = property_name)
+        ldl = DataLoader(ldf, batch_size = batch_size, graphtype='line', task = task, property_name = property_name)
+        batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords = dl.get_data()
+        batched_line_node_features, batched_line_edge_indices, batched_line_edge_features = ldl.get_data()
+    else:
+        with open(df_path, 'rb') as f:
+            df = pickle.load(f)
+        with open(ldf_path, 'rb') as f:
+            ldf = pickle.load(f)
+        dl = DataLoader(df, batch_size = batch_size, graphtype='crystal', task = task, property_name = property_name)
+        ldl = DataLoader(ldf, batch_size = batch_size, graphtype='line', task = task, property_name = property_name)
+        batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords = dl.get_data()
+        batched_line_node_features, batched_line_edge_indices, batched_line_edge_features = ldl.get_data()
+
+    data = {
+    "batched_node_features": batched_node_features,
+    "batched_edge_indices": batched_edge_indices,
+    "batched_edge_features": batched_edge_features,
+    "batched_labels": batched_labels,
+    "batched_node_indices": batched_node_indices,
+    "batched_group_sizes": batched_group_sizes,
+    "batched_cells": batched_cells,
+    "batched_coords": batched_coords,
+    "batched_line_node_features": batched_line_node_features,
+    "batched_line_edge_indices": batched_line_edge_indices,
+    "batched_line_edge_features": batched_line_edge_features
+    }
+
+    return data
+
+
 
 
 
@@ -114,6 +156,22 @@ class DataLoader:
     return batched_coords
 
 
+  def batch_site_properties(self, site_properties_list, batch_size):
+    num_batches = int(np.round(len(site_properties_list) / batch_size)) - 1
+    batched_site_properties = []
+    batch_index = 0
+
+    for batch in range(num_batches):
+        try:
+            batched_site_property = torch.cat(site_properties_list[batch_index:batch_index + batch_size])
+            batched_site_properties.append(torch.tensor(batched_site_property))
+            batch_index += batch_size
+        except:
+            batched_site_property = torch.cat(site_properties_list[batch_index:])
+            batched_site_properties.append(torch.tensor(batched_site_property))
+    return batched_site_properties
+
+
 
 
   def batch_edge_features(self, feature_list, batch_size):
@@ -124,13 +182,11 @@ class DataLoader:
           try:
               batched_edge_feature = feature_list[batch_index:batch_index + batch_size]
               batched_edge_feature = np.concatenate(feature_list[batch_index:batch_index + batch_size])
-              #batched_edge_feature = [item for sublist in batched_edge_feature for item in sublist]
               batched_edge_features.append(torch.tensor(batched_edge_feature))
               batch_index = batch_index + batch_size
           except:
               batched_edge_feature = feature_list[batch_index:]
               batched_edge_feature = np.concatenate(feature_list[batch_index:])
-              #batched_edge_feature = [item for sublist in batched_edge_feature for item in sublist]
               batched_edge_features.append(torch.tensor(batched_edge_feature))
       return batched_edge_features
 
@@ -187,7 +243,7 @@ class DataLoader:
           batched_target_values.append(repeated_tensor)
       return batched_target_values
   
-  def batch_data(self, batch_size, node_features, edge_indices, edge_features, labels=None, cells=None, coords=None):
+  def batch_data(self, batch_size, node_features, edge_indices, edge_features, labels=None, cells=None, coords=None, site_properties=None):
         if self.graphtype == 'crystal':
             batched_node_features, batched_group_sizes = self.batch_node_features(node_features, self.batch_size)
             batched_edge_indices = self.batch_edge_indices(edge_indices, self.batch_size, node_features)
@@ -196,6 +252,7 @@ class DataLoader:
             batched_labels = self.batch_labels(labels, self.batch_size)
             batched_cells = self.batch_cells(cells, self.batch_size)
             batched_coords = self.batch_coordinates(coords, self.batch_size)
+            #batched_site_properties = self.batch_site_properties(site_properties, self.batch_size) 
             return batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords
         else:
             batched_node_features, batched_group_sizes = self.batch_node_features(node_features, self.batch_size)
