@@ -20,7 +20,7 @@ class GNN(nn.Module):
         
         self.node_linear = nn.Linear(in_dim,n_hid)
         self.line_node_linear = nn.Linear(line_in_dim,n_hid)
-        self.edge_linear = nn.Linear(80, n_hid)
+        self.edge_linear = nn.Linear(80, n_hid) # --> changed to 40 from 80
         self.line_edge_linear = nn.Linear(40, n_hid)
         self.state_linear = nn.Linear(batch_size, batch_size)
         self.cell_linear = nn.Linear(batch_size*9, batch_size)
@@ -29,7 +29,7 @@ class GNN(nn.Module):
         self.norm = nn.LayerNorm(n_hid)
         self.node_ff = mlp(in_dim, n_hid, hidden_dim=ff_hidden, num_layers = n_mlp_layers)
         self.line_node_ff = mlp(line_in_dim, n_hid, hidden_dim=ff_hidden, num_layers=n_mlp_layers)
-        self.edge_ff = mlp(80, n_hid, hidden_dim=ff_hidden, num_layers = n_mlp_layers)
+        self.edge_ff = mlp(80, n_hid, hidden_dim=ff_hidden, num_layers = n_mlp_layers) # --> changed to 40 from 80 
         self.line_edge_ff = mlp(40, n_hid, hidden_dim=ff_hidden, num_layers = n_mlp_layers) 
         self.state_ff = mlp(batch_size, batch_size, hidden_dim = ff_hidden, num_layers = n_mlp_layers) 
         self.cell_ff = mlp(batch_size*9, batch_size, hidden_dim = ff_hidden, num_layers = n_mlp_layers)
@@ -73,9 +73,8 @@ class GNN(nn.Module):
             line_meta_node = lgc(line_meta_node, line_edge_index, line_meta_edge, None, None, None, 'line')
             meta_node = gc(meta_node, edge_index, meta_edge, meta_state, meta_cell, meta_coords, 'crystal')
             final_node = fgc(meta_node, edge_index, line_meta_node, meta_state, meta_cell, meta_coords,'crystal')
-            alpha = F.relu(self.alpha) #torch.sigmoid(self.alpha)
-            #print(alpha)
-            final_node = alpha * node_res + final_node #meta_node
+            alpha = F.relu(self.alpha) 
+            final_node =  alpha * node_res + final_node #meta_node
         return final_node
 
     def pool(self,atom_features,idx):
