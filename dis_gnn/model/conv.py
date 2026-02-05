@@ -11,6 +11,7 @@ import time
 from torch_scatter import scatter_mean
 from .layers import ResidualMessageMLP
 from .layers import GatedMLP
+from .layers import GATLayer
 class Convolution(MessagePassing):
     def __init__(self, in_dim, out_dim, n_resid_layers = 1, n_mlp_layers = 1, graphtype ='crystal', **kwargs):
         super(Convolution, self).__init__(node_dim=0, aggr='add', **kwargs)
@@ -27,13 +28,12 @@ class Convolution(MessagePassing):
         self.line_node_linears =  GatedMLP(in_dim*2, out_dim, hidden_dim = self.resid_hidden,n_layers = self.n_resid_layers)
         self.norm = nn.LayerNorm(out_dim)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
- 
+        self.crystal_gat_layer = GATLayer(in_dim*3+1, out_dim) 
+        self.line_gat_layer = GATLayer(in_dim*2, out_dim) 
     def forward(self, node_inp, edge_index, edge_feature, global_state = None, cells = None, coords = None, graphtype = 'crystal'):
         
         concat_edge, concat_node = self.message(edge_index[0],edge_index[1], node_inp, node_inp, edge_feature, global_state, cells, coords, graphtype)
-        #if graphtype != 'crystal':
-            #print(concat_node.shape)
-
+        
         return concat_node
 
     def average_edge_vector(self, edge_index, edge_attr):
@@ -55,10 +55,9 @@ class Convolution(MessagePassing):
         
         try:
             concat_edge = torch.concat([node_inp_i_rollout, node_inp_j_rollout, edge_feature],dim = 1)
-        except:
-            print('node_inp_i_rollout:', node_inp_i_rollout.shape)
-            print('node_inp_j_rollout:', node_inp_j_rollout.shape)
-            print('edge_feature:', edge_feature.shape)
+        except Exception as e:
+            print(e) 
+
         concat_edge = self.bond_linears.forward(concat_edge)
         agg_edges = self.average_edge_vector(edge_index, concat_edge)
         
@@ -70,20 +69,18 @@ class Convolution(MessagePassing):
                 concat_node = torch.concat([node_inp_i, agg_edges, coords, global_state],dim = 1)
             except Exception as e:
                 print(e)
-                print('edge_index:', edge_index)
-                print('node_inp_i shape:', node_inp_i.shape)
-                print('agg_edges shape:', agg_edges.shape)
-                print('coords shape:', coords.shape)
-                print('global_state shape:', global_state.shape)
-            concat_node = self.node_linears.forward(concat_node)
+          
+            
+            #concat_node = self.node_linears.forward(concat_node)
+            concat_node = self.crystal_gat_layer.forward(concat_node, edge_index) 
             concat_node = self.norm(concat_node)
         else:
             try:
                 concat_node = torch.concat([node_inp_i, agg_edges],dim=1) 
-            except:
-                print('line node shape:', node_inp_i.shape) 
-                print('edge_index:', edge_index)
-            concat_node = self.line_node_linears.forward(concat_node)
+            except Exception as e:
+                print(e)
+            #concat_node = self.line_node_linears.forward(concat_node)
+            concat_node = self.line_gat_layer.forward(concat_node, edge_index) 
             concat_node = self.norm(concat_node) 
        
         return concat_edge, concat_node 
