@@ -21,7 +21,7 @@
  ```bash
   pip install -r requirements.txt
   ```
-## 3. Using dis-GNN
+## 4. Using dis-GNN
 - via the usage file, to train a model run 
 ```bash
 python -m main --config ./dis_gnn/config/config.yaml
