@@ -22,6 +22,7 @@ conda create -n dis_gnn python=3.12
   ```
 ## 3. Install required packages
  ```bash
+ conda install pip
  pip install -r requirements.txt
   ```
 ## 4. Using dis-GNN
