@@ -9,11 +9,11 @@ data_module:
   df_save_path: './dis_gnn/data/data/test_df.pkl' 
   ldf_save_path: './dis_gnn/data/data/test_ldf.pkl'
 model:
-  task: 'regression'
+  task: 'classification'
   checkpoint_path: './checkpoints/'
   batch_size: 1
   num_epochs: 1000
-  criterion: 'l1'
+  criterion: 'bce'
   optimizer: 'adam'
   lr: 0.000025
   test_val_split: 0.9
