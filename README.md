@@ -4,9 +4,6 @@
 
 # Getting DIS-GNN
 
-- Main packages needed
-pytorch version
-
 ## 1. Create Conda Environment
 - While not mandatory, we recommend creating a clean conda environment before installing DIS-GNN to avoid potential package conflicts. You can create and activate a conda environment with the following commands:
 ```bash
@@ -23,7 +20,17 @@ conda create -n dis_gnn python=3.12
 ## 3. Install required packages
  ```bash
  conda install pip
- pip install -r requirements.txt
+ ```
+ ```bash 
+pip install -r requirements.txt
+  ```
+Before installing the requirements file, we recommend installing torch first
+ ```bash 
+pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+  ```
+followed by 
+ ```bash 
+pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.8.0+cu128.html
   ```
 ## 4. Using dis-GNN
 - via the usage file, to train a model run 
