@@ -4,6 +4,9 @@
 
 # Getting DIS-GNN
 
+- Main packages needed
+pytorch version
+
 ## 1. Create Conda Environment
 - While not mandatory, we recommend creating a clean conda environment before installing DIS-GNN to avoid potential package conflicts. You can create and activate a conda environment with the following commands:
 ```bash
