@@ -1,7 +1,5 @@
 
-
-<img width="2500" height="1184" alt="DIS-GNN-WORKFLOW_vertical (2)" src="https://github.com/user-attachments/assets/431be5b1-7d76-4098-a7f4-67103092cb8a" />
-
+<img width="2500" height="1184" alt="DIS-GNN-WORKFLOW_vertical (3)" src="https://github.com/user-attachments/assets/91c2123a-ce39-456d-887e-817b6a8621e7" />
 
 # Getting DIS-GNN
 
