@@ -31,6 +31,7 @@ def train(cfg_path):
     checkpoint_path = model_cfg["checkpoint_path"]
     batch_size = model_cfg["batch_size"]
     num_epochs = model_cfg["num_epochs"]
+    scope = model_cfg["scope"]
     criterion_name = model_cfg["criterion"]
     optimizer = model_cfg["optimizer"]
     n_hid = model_cfg["n_hid"]
@@ -54,7 +55,7 @@ def train(cfg_path):
     logger('./logs/','starting run...', stamp)
     data = load_data(df_path = df_path, ldf_path = ldf_path, structures_path = structures_path, batch_size = batch_size, 
         composition = composition, num_atoms = num_atoms,  property_name = dm_cfg['property_name'], 
-        df_save_path = dm_cfg["df_save_path"], ldf_save_path = dm_cfg["ldf_save_path"], cutoff = dm_cfg["cutoff"], task = task)
+        df_save_path = dm_cfg["df_save_path"], ldf_save_path = dm_cfg["ldf_save_path"], cutoff = dm_cfg["cutoff"], task = task, scope = scope)
     
     #data = random_shuffle(data) 
 
@@ -85,6 +86,7 @@ def train(cfg_path):
     training_losses = []
     validation_accuracy = []
     validation_losses = []
+    
     for epoch in range(num_epochs):
         model.train()
         train_predictions_inner = []
@@ -94,17 +96,21 @@ def train(cfg_path):
             optimizer.zero_grad(set_to_none=True)
             flattened_node_features, flattened_edge_indices, flattened_edge_features = batched_node_features[i].to(device), batched_edge_indices[i].to(device), batched_edge_features[i].to(device=device,dtype=torch.float32)
             flattened_line_node_features, flattened_line_edge_indices, flattened_line_edge_features = batched_line_node_features[i].to(dtype=torch.float32, device=device), batched_line_edge_indices[i].to(device), batched_line_edge_features[i].to(device=device,dtype=torch.float32)
-            cells, coords = batched_cells[i].to(dtype=torch.float32, device = device), batched_coords[i].to(dtype=torch.float32, device=device)
-            
-            y_labels = batched_labels[i].to(dtype=torch.float32, device=device).reshape(batch_size, 1)      
+            cells, coords = batched_cells[i].to(dtype=torch.float32, device = device), batched_coords[i].to(dtype=torch.float32, device=device) 
             group_sizes = batched_group_sizes[i].to(device=device)
-            state = batched_labels[i].to(dtype=torch.float32, device=device)
-            state = torch.zeros_like(state).to(dtype = torch.float32, device=device)
+            #state = batched_labels[i].to(dtype=torch.float32, device=device)
+            #state = torch.zeros_like(state).to(dtype = torch.float32, device=device)
+            state = torch.zeros(batch_size).to(dtype = torch.float32, device = device)
             output = gnn(flattened_node_features, flattened_edge_indices, flattened_edge_features, global_state = state, 
                     group_size = group_sizes, cell = cells, coords = coords, line_node_feature = flattened_line_node_features, 
                     line_edge_index = flattened_line_edge_indices, line_edge_feature = flattened_line_edge_features)
-            pooled_output = gnn.pool(output, batched_node_indices[i])
-            pred = downstream(pooled_output)
+            if scope == 'graph':
+                pooled_output = gnn.pool(output, batched_node_indices[i])
+                y_labels = batched_labels[i].to(dtype=torch.float32, device=device).reshape(batch_size, 1)
+            else:
+                pooled_output = output 
+                y_labels = batched_labels[i].to(dtype=torch.float32, device=device).reshape(batched_labels[i].shape[1],1)
+            pred = downstream(pooled_output) 
             loss = criterion(pred, y_labels)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
@@ -132,6 +138,7 @@ def train(cfg_path):
         validation_losses_inner = []
         validation_predictions_inner = []
         validation_labels_inner = []
+       
         with torch.no_grad():
             for i in range(num_val):
                 flattened_node_features_val, flattened_edge_indices_val, flattened_edge_features_val = batched_node_features[num + i].to(device), batched_edge_indices[num + i].to(device), torch.tensor(batched_edge_features[num + i], dtype=torch.float32, device=device)
@@ -139,17 +146,21 @@ def train(cfg_path):
                 flattened_line_node_features_val = batched_line_node_features[num + i].to(dtype=torch.float32, device=device)
                 flattened_line_edge_indices_val = batched_line_edge_indices[num + i].to(device)
                 flattened_line_edge_features_val = batched_line_edge_features[num + i].to(dtype=torch.float32, device=device)
-
-                y_labels_val = batched_labels[num + i].to(dtype=torch.float32, device=device).reshape(batch_size, 1)
-                state_val = batched_labels[num+i].to(dtype=torch.float32, device=device)
-                state_val = torch.zeros_like(state_val).to(dtype = torch.float32, device=device)
+                #state_val = batched_labels[num+i].to(dtype=torch.float32, device=device)
+                #state_val = torch.zeros_like(state_val).to(dtype = torch.float32, device=device)
+                state_val = torch.zeros(batch_size).to(dtype = torch.float32, device = device)
                 cells_val, coords_val = batched_cells[num+i].to(dtype=torch.float32, device=device), batched_coords[num+i].to(dtype=torch.float32, device=device)
                 group_sizes_val = batched_group_sizes[num + i].to(device = device)
                 output_val = gnn(flattened_node_features_val, flattened_edge_indices_val, flattened_edge_features_val, 
                         global_state = state_val, group_size = group_sizes_val, cell = cells_val, coords = coords_val,
                         line_node_feature = flattened_line_node_features_val, line_edge_index = flattened_line_edge_indices_val, 
                         line_edge_feature = flattened_line_edge_features_val)
-                output_val = gnn.pool(output_val, batched_node_indices[num + i])
+                if scope == 'graph':
+                    output_val = gnn.pool(output_val, batched_node_indices[num + i])
+                    y_labels_val = batched_labels[num + i].to(dtype=torch.float32, device=device).reshape(batch_size, 1)
+                else:
+                    output_val = output_val
+                    y_labels_val = batched_labels[num + i].to(dtype=torch.float32, device=device).reshape(batched_labels[num + i].shape[1], 1)
                 pred_val = downstream(output_val)
                 loss_val = criterion(pred_val, y_labels_val)
                 validation_losses_inner.append(loss_val.item())
