@@ -37,16 +37,25 @@ def filter_by_elements(data, symbols=None):
     return filtered
 
 class GraphFeaturizer:
-    def __init__(self, structures, cutoff = 4.0, property_name = 'band_gap', composition = None, num_atoms = 12, e_above_hull = 0.1, save_path = None):
+    def __init__(self, structures, cutoff = 4.0, property_name = 'band_gap', composition = None, num_atoms = 12, e_above_hull = 0.1, save_path = None, scope = 'graph'):
+        
+
         self.structures = filter_by_elements(structures, composition)
         self.ind = [i for i,structure in enumerate(self.structures) if len(structure['structure']['sites']) <= num_atoms and structure['energy_above_hull'] is not None and structure['energy_above_hull'] <= e_above_hull]
         #self.ind = [i for i,structure in enumerate(self.structures) if len(structure['structure']['sites']) <= num_atoms]
         self.structs = [Structure.from_dict(self.structures[i]['structure']) for i in self.ind]
         self.structs = [s * [2, 2, 1] if len(s) <= 2 else s for s in self.structs]
-        self.properties = [self.structures[i][property_name] for i in self.ind]
+        if scope == 'graph':
+            self.properties = [self.structures[i][property_name] for i in self.ind]
+        else:
+            self.properties = [[abs(float(site.properties.get('magmom', 0.0)))
+            for site in s.sites] for s in self.structs]
+        
         self.cutoff = cutoff
         self.property_name = property_name
         self.save_path = save_path
+
+
     def create_adjacency_matrices(self, structure, cutoff):
         begin = time.time()
         num_atoms = len(structure)
@@ -62,6 +71,8 @@ class GraphFeaturizer:
         end = time.time()
         #print('create_adjacency_matrices:', end - begin)
         return init_adjacency,edge_index,edge_type
+    
+
     def create_node_features_old(self, structure):
         groups = {
         'transition_metals': ['Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn', 'Y', 'Zr', 'Nb', 'Mo', 'Tc',
@@ -106,6 +117,7 @@ class GraphFeaturizer:
         ]
         return new_node,node_types
 
+    
     def create_node_features(self, structure):
         begin = time.time()
         node_features = []
@@ -119,6 +131,7 @@ class GraphFeaturizer:
         #print('create_node_features time:',end-begin)
         return torch.tensor(node_features).to(dtype=torch.float32), node_types
 
+    
     def create_edge_features(self, structure,adjacency_matrix):
         begin = time.time()
         bond_distances = []
@@ -183,6 +196,7 @@ class GraphFeaturizer:
             out.append(feat)
         return torch.tensor(np.array(out))
 
+    
     def featurize(self):
         df = []
         for i, structure in tqdm(enumerate(self.structs), total=len(self.structs), desc="featurizing structures"):
