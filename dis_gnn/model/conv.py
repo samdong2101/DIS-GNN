@@ -71,16 +71,16 @@ class Convolution(MessagePassing):
                 print(e)
           
             
-            #concat_node = self.node_linears.forward(concat_node)
-            concat_node = self.crystal_gat_layer.forward(concat_node, edge_index) 
+            concat_node = self.node_linears.forward(concat_node)
+            #concat_node = self.crystal_gat_layer.forward(concat_node, edge_index) 
             concat_node = self.norm(concat_node)
         else:
             try:
                 concat_node = torch.concat([node_inp_i, agg_edges],dim=1) 
             except Exception as e:
                 print(e)
-            #concat_node = self.line_node_linears.forward(concat_node)
-            concat_node = self.line_gat_layer.forward(concat_node, edge_index) 
+            concat_node = self.line_node_linears.forward(concat_node)
+            #concat_node = self.line_gat_layer.forward(concat_node, edge_index) 
             concat_node = self.norm(concat_node) 
        
         return concat_edge, concat_node 
