@@ -51,7 +51,7 @@ class GNN(nn.Module):
         meta_edge = self.residual_connection(edge_feature, self.edge_linear, self.edge_ff)
          
         if None not in (line_node_feature, line_edge_index, line_node_feature):
-            line_node_res = self.line_node_ff(line_node_feature)
+            #line_node_res = self.line_node_ff(line_node_feature)
             line_meta_node = self.residual_connection(line_node_feature, self.line_node_linear, self.line_node_ff)
             line_meta_edge = self.residual_connection(line_edge_feature, self.line_edge_linear, self.line_edge_ff)
             
@@ -59,7 +59,9 @@ class GNN(nn.Module):
         if global_state is not None:
             meta_state = self.residual_connection(global_state, self.state_linear, self.state_ff)
             meta_state = torch.repeat_interleave(meta_state, group_size).to(self.device) 
-        
+        else:
+            meta_state = None
+
         if cell is not None:
             meta_cell = self.residual_connection(cell, self.cell_linear, self.cell_ff) 
 
