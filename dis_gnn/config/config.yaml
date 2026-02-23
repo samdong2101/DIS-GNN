@@ -3,26 +3,26 @@ data_module:
   ldf_path: null 
   composition: null 
   structures_path: '/blue/hennig/sam.dong/mp_api/mp_api_09_25_2025.pkl'
-  cutoff: 5.0
-  num_atoms: 12
-  property_name: 'is_magnetic'
+  cutoff: 5.5
+  num_atoms: 20
+  property_name: 'magmom'
   df_save_path: './dis_gnn/data/data/test_df.pkl' 
   ldf_save_path: './dis_gnn/data/data/test_ldf.pkl'
 model:
-  task: 'classification'
+  scope: 'node'
+  task: 'regression'
   checkpoint_path: './checkpoints/'
   batch_size: 1
   num_epochs: 1000
-  criterion: 'bce'
+  criterion: 'l1'
   optimizer: 'adam'
-  lr: 0.000025
+  lr: 0.000055
   test_val_split: 0.9
   n_hid: 32
   gnn:
-    n_layers: 3
+    n_layers: 1
     dropout: 0.5
     n_resid_layers: 3
     n_mlp_layers: 3
   downstream:
     hidden_dim: 32
-
