@@ -32,16 +32,16 @@ def calculate_bce_baseline(proportion_positive: float) -> float:
 
 
 
-def load_data(structures_path = None, df_path = None, ldf_path = None, batch_size = 32, property_name = 'band_gap', composition = None, num_atoms = 20, cutoff = 4.0, df_save_path = None, ldf_save_path = None, task = 'classification'): 
+def load_data(structures_path = None, df_path = None, ldf_path = None, batch_size = 32, property_name = 'band_gap', composition = None, num_atoms = 20, cutoff = 4.0, df_save_path = None, ldf_save_path = None, task = 'classification', scope = 'graph'): 
     if df_path is None:
         with open(structures_path,'rb') as f:
             structures = pickle.load(f)
-        gf = GraphFeaturizer(structures, cutoff, property_name, composition = composition, num_atoms = num_atoms, save_path = df_save_path)
+        gf = GraphFeaturizer(structures, cutoff, property_name, composition = composition, num_atoms = num_atoms, save_path = df_save_path, scope = scope)
         df = gf.featurize()
         lgf = LineGraphFeaturizer(df, save_path=ldf_save_path)
         ldf = lgf.featurize()
-        dl = DataLoader(df, batch_size = batch_size, graphtype='crystal', task = task, property_name = property_name)
-        ldl = DataLoader(ldf, batch_size = batch_size, graphtype='line', task = task, property_name = property_name)
+        dl = DataLoader(df, batch_size = batch_size, graphtype='crystal', task = task, property_name = property_name, scope = scope)
+        ldl = DataLoader(ldf, batch_size = batch_size, graphtype='line', task = task, property_name = property_name, scope = scope)
         batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords = dl.get_data()
         batched_line_node_features, batched_line_edge_indices, batched_line_edge_features = ldl.get_data()
     else:
@@ -49,8 +49,8 @@ def load_data(structures_path = None, df_path = None, ldf_path = None, batch_siz
             df = pickle.load(f)
         with open(ldf_path, 'rb') as f:
             ldf = pickle.load(f)
-        dl = DataLoader(df, batch_size = batch_size, graphtype='crystal', task = task, property_name = property_name)
-        ldl = DataLoader(ldf, batch_size = batch_size, graphtype='line', task = task, property_name = property_name)
+        dl = DataLoader(df, batch_size = batch_size, graphtype='crystal', task = task, property_name = property_name, scope = scope)
+        ldl = DataLoader(ldf, batch_size = batch_size, graphtype='line', task = task, property_name = property_name, scope = scope)
         batched_node_features, batched_edge_indices, batched_edge_features, batched_labels, batched_node_indices, batched_group_sizes, batched_cells, batched_coords = dl.get_data()
         batched_line_node_features, batched_line_edge_indices, batched_line_edge_features = ldl.get_data()
 
@@ -75,28 +75,34 @@ def load_data(structures_path = None, df_path = None, ldf_path = None, batch_siz
 
 
 class DataLoader:
-  def __init__(self, df, batch_size = 32, graphtype = 'crystal', task = 'classification', property_name = 'band_gap'):
+  def __init__(self, df, batch_size = 32, graphtype = 'crystal', task = 'classification', property_name = 'band_gap', labels_list = None, scope = 'graph'):
     self.df = df
     self.batch_size = batch_size
     self.graphtype = graphtype   
     self.task = task
     self.property_name = property_name
-  def load_data(self, df):
+    self.labels_list = labels_list
+    self.scope = scope
+  def load_data(self, df, labels_list = None):
     if self.graphtype == 'crystal':
         node_features = [i for i in df['node_feature']]
         edge_indices = [i for i in df['edge_index']]
-        labels_list = [i for i in df[self.property_name]]
+        if labels_list is None:
+            labels_list = [i for i in df[self.property_name]]
         edge_features = [i for i in df['edge_feature']]
-        if self.task == 'classification':
-            labels = [0 if bg == 0 or np.isnan(bg) else 1 for bg in labels_list]
+        if self.scope == 'graph':
+            if self.task == 'classification':
+                labels = [0 if bg == 0 or np.isnan(bg) else 1 for bg in labels_list]
+            else:
+                labels = [0 if bg == 0 or np.isnan(bg) else bg for bg in labels_list]
         else:
-            labels = [0 if bg == 0 or np.isnan(bg) else bg for bg in labels_list]
+            labels = labels_list
         structures = [i for i in df['structure']]
         cells = [torch.tensor(i.lattice.matrix).flatten() for i in structures]
         coords = [torch.tensor(i.frac_coords) for i in structures]
-        frac = sum(labels)/len(labels)
-        baseline = calculate_bce_baseline(frac)
-        print('BASELINE BCE LOSS:',baseline)
+        #frac = sum(labels)/len(labels)
+        #baseline = calculate_bce_baseline(frac)
+        #print('BASELINE BCE LOSS:',baseline)
         return node_features,edge_indices, labels_list, edge_features, labels, structures, cells, coords
     else:
         node_features = [i for i in df['line_node_feature']]
