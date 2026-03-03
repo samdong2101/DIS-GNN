@@ -38,5 +38,5 @@ python -m main --config ./dis_gnn/config/config.yaml
 ```
 - to infer on a dataset run
 ```bash
-python inference.py --stamp YOUR_STAMP # stamp defaults to date and time of run. 
+python inference.py --stamp YOUR_STAMP # stamp defaults to date and time of run. e.g. 2026-02-23_11:57:12.172453
 ```
