@@ -36,3 +36,7 @@ pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -
 ```bash
 python -m main --config ./dis_gnn/config/config.yaml
 ```
+- to infer on a dataset run
+```bash
+python inference.py --stamp YOUR_STAMP 
+```
